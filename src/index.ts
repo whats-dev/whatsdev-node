@@ -1,2 +1,5 @@
 export { WhatsDevClient } from './client'
 export { DEFAULT_BASE_URL, resolveConfig, type ClientOptions, type ResolvedConfig } from './config'
+export { type ApiResponse, type RequestOptions, Transport } from './http/transport'
+export { type Page, pageFromResponse, Paginator } from './pagination'
+export { type Result, resultFromResponse } from './result'

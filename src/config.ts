@@ -7,6 +7,8 @@ export interface ClientOptions {
   timeout?: number
   maxRetries?: number
   headers?: Record<string, string>
+  /** Node equivalent of the PHP package's withHttpClient(). */
+  fetch?: typeof fetch
 }
 
 export interface ResolvedConfig {
