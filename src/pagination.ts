@@ -31,16 +31,60 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 // encodes the caller's filters into that URL. A rebuild would silently drop them on page two.
 // Resolved against baseUrl so a relative next link (the API emits absolute ones today, but
 // nothing guarantees that forever) still parses instead of being mistaken for the last page.
-function queryFrom(url: string, baseUrl: string): Record<string, string> {
+function queryFrom(url: string, baseUrl: string): Record<string, unknown> {
   try {
-    const query: Record<string, string> = {}
+    const query: Record<string, unknown> = {}
     for (const [key, value] of new URL(url, baseUrl).searchParams.entries()) {
-      query[key] = value
+      assign(query, segmentsOf(key), value)
     }
     return query
   } catch {
     return {}
   }
+}
+
+/**
+ * Mirrors PHP's parse_str(), which is how the sibling package reads the same URL: tag[]=x&tag[]=y
+ * is two values, not one. searchParams.entries() hands back the literal key twice, so writing it
+ * straight into an object kept only the last value and page two asked for half the filter.
+ */
+function segmentsOf(key: string): string[] {
+  const start = key.indexOf('[')
+
+  if (start === -1 || !key.endsWith(']')) {
+    return [key]
+  }
+
+  const brackets = key.slice(start).match(/\[[^[\]]*\]/g)
+
+  // A key like a[b]c[d] is not bracket notation at all; PHP leaves such a key alone and so do we.
+  if (brackets === null || brackets.join('') !== key.slice(start)) {
+    return [key]
+  }
+
+  return [key.slice(0, start), ...brackets.map((bracket) => bracket.slice(1, -1))]
+}
+
+function assign(target: Record<string, unknown>, segments: string[], value: string): void {
+  let container = target
+
+  for (const segment of segments.slice(0, -1)) {
+    const key = nextKey(container, segment)
+
+    if (typeof container[key] !== 'object' || container[key] === null) {
+      container[key] = {}
+    }
+
+    container = container[key] as Record<string, unknown>
+  }
+
+  container[nextKey(container, segments[segments.length - 1]!)] = value
+}
+
+// An empty segment is the append form, and its index is the count already in the container —
+// which serialises back out as tag[0], tag[1], exactly what http_build_query() would emit.
+function nextKey(container: Record<string, unknown>, segment: string): string {
+  return segment === '' ? String(Object.keys(container).length) : segment
 }
 
 export class Paginator<T> implements AsyncIterable<T> {

@@ -42,6 +42,25 @@ describe('Transport', () => {
     expect(calls[0]!.url).toBe('https://whats.youdev.online/v1/messages?type=text')
   })
 
+  // The server is Laravel, so its own parser is the reference for what a query string means, and
+  // the sibling package's http_build_query() is the form it parses natively. A comma-joined array
+  // is silently dropped by that parser and a literal "true" is not the boolean it looks like.
+  it.each([
+    ['an array filter as indexed brackets', { status: ['sent', 'failed'] }, 'status%5B0%5D=sent&status%5B1%5D=failed'],
+    ['a boolean as 1 and 0', { starred: true, unread: false }, 'starred=1&unread=0'],
+    ['a nested map with bracket keys', { filter: { type: 'text', n: 3 } }, 'filter%5Btype%5D=text&filter%5Bn%5D=3'],
+    ['a null nested inside an array, without renumbering', { tag: ['x', null, 'y'] }, 'tag%5B0%5D=x&tag%5B2%5D=y'],
+    ['an empty array as nothing at all', { tag: [], type: 'text' }, 'type=text'],
+    ['reserved characters in keys and values', { 'q a': 'a b&c=d', tilde: '~!*()' }, 'q+a=a+b%26c%3Dd&tilde=%7E%21%2A%28%29'],
+    ['a float without dropping its fraction', { lat: 15.35 }, 'lat=15.35'],
+  ])('serialises %s', async (_name, query, expected) => {
+    const { fetch, calls } = stubFetch([{ status: 200 }])
+
+    await transport(fetch).request('GET', 'v1/messages', { query })
+
+    expect(calls[0]!.url).toBe(`https://whats.youdev.online/v1/messages?${expected}`)
+  })
+
   it('raises the typed error for the error code', async () => {
     const { fetch } = stubFetch([{ status: 429, body: { error: { code: 'quota_exceeded', message: 'No.' } } }])
 

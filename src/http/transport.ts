@@ -73,6 +73,53 @@ function assertSendableIdempotencyKey(headers: Record<string, string>): void {
 }
 
 /**
+ * Mirrors PHP's http_build_query(), which is the form the Laravel server on the other end parses
+ * natively: an array as indexed brackets, a boolean as 1 or 0, a null dropped without renumbering
+ * what surrounds it. URLSearchParams with String(value) turned ['a','b'] into the scalar 'a,b',
+ * which that parser silently drops, and true into the string 'true', which it does not read as
+ * a boolean. No tier-1 endpoint takes an array filter today; the escape hatch reaches ones that do.
+ */
+function buildQuery(query: Record<string, unknown>): string {
+  const pairs: string[] = []
+
+  for (const [key, value] of Object.entries(query)) {
+    appendQuery(pairs, value, key)
+  }
+
+  return pairs.join('&')
+}
+
+function appendQuery(pairs: string[], value: unknown, key: string): void {
+  if (value === null || value === undefined) {
+    return
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => appendQuery(pairs, item, `${key}[${index}]`))
+
+    return
+  }
+
+  if (typeof value === 'object') {
+    for (const [name, item] of Object.entries(value as Record<string, unknown>)) {
+      appendQuery(pairs, item, `${key}[${name}]`)
+    }
+
+    return
+  }
+
+  pairs.push(`${urlencode(key)}=${urlencode(typeof value === 'boolean' ? (value ? '1' : '0') : String(value))}`)
+}
+
+// Mirrors PHP's urlencode(), not encodeURIComponent(): the latter leaves !'()*~ unescaped and
+// writes a space as %20 where PHP writes +.
+function urlencode(value: string): string {
+  return encodeURIComponent(value)
+    .replace(/[!'()*~]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/%20/g, '+')
+}
+
+/**
  * The API never legitimately redirects, so a 3xx is an error like any other: catchable as an
  * ApiError, naming the status and the Location it pointed at.
  */
@@ -223,19 +270,7 @@ export class Transport {
     const base = this.#config.baseUrl.replace(/\/+$/, '')
     const url = `${base}/${path.replace(/^\/+/, '')}`
 
-    if (!query) {
-      return url
-    }
-
-    const params = new URLSearchParams()
-    for (const [key, value] of Object.entries(query)) {
-      if (value === null || value === undefined) {
-        continue
-      }
-      params.append(key, String(value))
-    }
-
-    const qs = params.toString()
+    const qs = query ? buildQuery(query) : ''
 
     return qs === '' ? url : `${url}?${qs}`
   }

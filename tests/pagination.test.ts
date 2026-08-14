@@ -104,6 +104,44 @@ describe('Paginator', () => {
     expect(new URL(calls[1]!.url).search).toBe('?cursor=p2&status=active&per_page=1')
   })
 
+  // The API encodes the caller's filters into links.next, so page two is only correct if every
+  // repeated bracket parameter survives the round trip out of that URL and back onto the wire.
+  it('keeps every value of a repeated bracket parameter carried by links.next', async () => {
+    const { fetch, calls } = stubFetch([
+      {
+        status: 200,
+        body: {
+          data: [{ id: 1 }],
+          links: { next: 'https://api.test/v1/contacts?tag[]=x&tag[]=y&cursor=c2' },
+          meta: { next_cursor: 'c2' },
+        },
+      },
+      { status: 200, body: { data: [], links: { next: null }, meta: {} } },
+    ])
+
+    await new Paginator(makeTransport(fetch), 'GET', 'v1/contacts', { tag: ['x', 'y'] }).all()
+
+    expect(new URL(calls[1]!.url).search).toBe('?tag%5B0%5D=x&tag%5B1%5D=y&cursor=c2')
+  })
+
+  it('reads a nested bracket parameter out of links.next as a map', async () => {
+    const { fetch, calls } = stubFetch([
+      {
+        status: 200,
+        body: {
+          data: [{ id: 1 }],
+          links: { next: 'https://api.test/v1/contacts?filter[type]=text&cursor=c2' },
+          meta: { next_cursor: 'c2' },
+        },
+      },
+      { status: 200, body: { data: [], links: { next: null }, meta: {} } },
+    ])
+
+    await new Paginator(makeTransport(fetch), 'GET', 'v1/contacts', {}).all()
+
+    expect(new URL(calls[1]!.url).search).toBe('?filter%5Btype%5D=text&cursor=c2')
+  })
+
   it('stops rather than looping forever when the server repeats a cursor', async () => {
     const { fetch, calls } = stubFetch([
       {
