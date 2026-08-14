@@ -1,5 +1,8 @@
 export { WhatsDevClient } from './client'
 export { DEFAULT_BASE_URL, resolveConfig, type ClientOptions, type ResolvedConfig } from './config'
+// Every typed error class plus errorFromResponse: without this, a consumer could never
+// import ApiError or a code-specific subclass to catch it by type.
+export * from './errors'
 export { type ApiResponse, type RequestOptions, Transport } from './http/transport'
 export { type Page, pageFromResponse, Paginator } from './pagination'
 export { type Result, resultFromResponse } from './result'
@@ -17,3 +20,4 @@ export { Sessions } from './resources/sessions'
 export { Suppressions } from './resources/suppressions'
 export { Templates } from './resources/templates'
 export { Webhooks } from './resources/webhooks'
+export { assertWebhookSignature, verifyWebhookSignature } from './webhooks'
