@@ -3,6 +3,9 @@ export interface RecordedCall {
   method: string
   headers: Record<string, string>
   body: unknown
+  // The body exactly as it was handed to fetch. `body` above is re-parsed, so it can never show
+  // the difference between {} and [] — which is the whole shape of the empty-body divergence.
+  rawBody: unknown
   redirect?: RequestInit['redirect']
 }
 
@@ -26,7 +29,7 @@ export function stubFetch(responses: StubEntry[]): { fetch: typeof fetch; calls:
     const rawBody = init?.body
     const body = typeof rawBody === 'string' ? parseBody(rawBody) : rawBody
 
-    calls.push({ url, method, headers, body, redirect: init?.redirect })
+    calls.push({ url, method, headers, body, rawBody, redirect: init?.redirect })
 
     const next = queue.length > 1 ? queue.shift()! : queue[0]
 

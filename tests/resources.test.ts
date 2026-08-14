@@ -57,6 +57,16 @@ describe('sessions', () => {
     expect(body).toEqual({ id: 4 })
   })
 
+  // The stub re-parses the body it records, so only the raw string can show the difference
+  // between {} and [] — the shape PHP used to send here.
+  it('serialises an empty body as an empty object', async () => {
+    const { client, calls } = setup({ status: 201, body: { id: 4 } })
+
+    await client.sessions.create()
+
+    expect(calls[0]!.rawBody).toBe('{}')
+  })
+
   it('passes a wrapped single-resource response through unchanged', async () => {
     const { client } = setup({ status: 201, body: { data: { id: 4, status: 'stopped' } } })
 
