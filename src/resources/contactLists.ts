@@ -1,4 +1,4 @@
-import { Resource } from './base'
+import { Resource, rawUrlEncode } from './base'
 import type { Paginator } from '../pagination'
 
 export class ContactLists extends Resource {
@@ -11,27 +11,27 @@ export class ContactLists extends Resource {
   }
 
   get(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/contact-lists/${id}`)
+    return this.httpGet(`v1/contact-lists/${rawUrlEncode(id)}`)
   }
 
   update(id: number | string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.httpPatch(`v1/contact-lists/${id}`, payload)
+    return this.httpPatch(`v1/contact-lists/${rawUrlEncode(id)}`, payload)
   }
 
   delete(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpDelete(`v1/contact-lists/${id}`)
+    return this.httpDelete(`v1/contact-lists/${rawUrlEncode(id)}`)
   }
 
   contacts(id: number | string, query: Record<string, unknown> = {}): Paginator<Record<string, unknown>> {
-    return this.paginate(`v1/contact-lists/${id}/contacts`, query)
+    return this.paginate(`v1/contact-lists/${rawUrlEncode(id)}/contacts`, query)
   }
 
   attach(id: number | string, contactIds: Array<number | string>): Promise<Record<string, unknown>> {
-    return this.httpPost(`v1/contact-lists/${id}/contacts`, { contact_ids: [...contactIds] })
+    return this.httpPost(`v1/contact-lists/${rawUrlEncode(id)}/contacts`, { contact_ids: [...contactIds] })
   }
 
   // A DELETE with a body, not query parameters — the server expects contact_ids there.
   detach(id: number | string, contactIds: Array<number | string>): Promise<Record<string, unknown>> {
-    return this.httpDelete(`v1/contact-lists/${id}/contacts`, { contact_ids: [...contactIds] })
+    return this.httpDelete(`v1/contact-lists/${rawUrlEncode(id)}/contacts`, { contact_ids: [...contactIds] })
   }
 }

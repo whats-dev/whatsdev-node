@@ -4,6 +4,17 @@ import { Paginator } from '../pagination'
 import { resultFromResponse } from '../result'
 import type { Result } from '../result'
 
+/**
+ * Every caller-supplied path segment goes through this. Unencoded, a forwarded route parameter
+ * retargets the request: `messageOps.delete('../../v1/sessions/9')` would otherwise reach the
+ * server as DELETE /v1/sessions/9, authenticated with the account's own key.
+ *
+ * Mirrors PHP's rawurlencode(): encodeURIComponent leaves !'()* unescaped, rawurlencode does not.
+ */
+export function rawUrlEncode(value: string | number): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+}
+
 // Prefixed http* (not get/post/delete): several resources define public get(id) and delete(id)
 // methods, and TypeScript rejects an incompatible override of a same-named base member.
 export abstract class Resource {

@@ -1,4 +1,4 @@
-import { Resource } from './base'
+import { Resource, rawUrlEncode } from './base'
 import type { Paginator } from '../pagination'
 
 export class Sessions extends Resource {
@@ -7,7 +7,7 @@ export class Sessions extends Resource {
   }
 
   get(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/sessions/${id}`)
+    return this.httpGet(`v1/sessions/${rawUrlEncode(id)}`)
   }
 
   create(options: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
@@ -15,30 +15,30 @@ export class Sessions extends Resource {
   }
 
   delete(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpDelete(`v1/sessions/${id}`)
+    return this.httpDelete(`v1/sessions/${rawUrlEncode(id)}`)
   }
 
   qr(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/sessions/${id}/qr`)
+    return this.httpGet(`v1/sessions/${rawUrlEncode(id)}/qr`)
   }
 
   pairingCode(id: number | string, phone: string): Promise<Record<string, unknown>> {
-    return this.httpPost(`v1/sessions/${id}/pairing-code`, { phone })
+    return this.httpPost(`v1/sessions/${rawUrlEncode(id)}/pairing-code`, { phone })
   }
 
   restart(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpPost(`v1/sessions/${id}/restart`)
+    return this.httpPost(`v1/sessions/${rawUrlEncode(id)}/restart`)
   }
 
   typing(id: number | string, chatId: string, on = true): Promise<Record<string, unknown>> {
-    return this.httpPost(`v1/sessions/${id}/typing`, { chat_id: chatId, on })
+    return this.httpPost(`v1/sessions/${rawUrlEncode(id)}/typing`, { chat_id: chatId, on })
   }
 
   seen(id: number | string, chatId: string): Promise<Record<string, unknown>> {
-    return this.httpPost(`v1/sessions/${id}/seen`, { chat_id: chatId })
+    return this.httpPost(`v1/sessions/${rawUrlEncode(id)}/seen`, { chat_id: chatId })
   }
 
   checkExists(id: number | string, phone: string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/sessions/${id}/check-exists`, { phone })
+    return this.httpGet(`v1/sessions/${rawUrlEncode(id)}/check-exists`, { phone })
   }
 }

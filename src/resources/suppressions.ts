@@ -1,10 +1,5 @@
-import { Resource } from './base'
+import { Resource, rawUrlEncode } from './base'
 import type { Paginator } from '../pagination'
-
-// Mirrors PHP's rawurlencode(): encodeURIComponent leaves !'()* unescaped, rawurlencode does not.
-function rawUrlEncode(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
-}
 
 export class Suppressions extends Resource {
   list(query: Record<string, unknown> = {}): Paginator<Record<string, unknown>> {

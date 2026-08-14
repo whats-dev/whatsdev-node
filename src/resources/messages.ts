@@ -1,4 +1,4 @@
-import { Resource } from './base'
+import { Resource, rawUrlEncode } from './base'
 import type { Paginator } from '../pagination'
 import type { Result } from '../result'
 import type { LocationPayload, MediaPayload, PollPayload, SendOptions } from '../types'
@@ -19,15 +19,15 @@ function applyOptions(body: Record<string, unknown>, options: SendOptions): Reco
 
 export class Messages extends Resource {
   list(sessionId: number | string, query: Record<string, unknown> = {}): Paginator<Record<string, unknown>> {
-    return this.paginate(`v1/sessions/${sessionId}/messages`, query)
+    return this.paginate(`v1/sessions/${rawUrlEncode(sessionId)}/messages`, query)
   }
 
   get(messageId: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/messages/${messageId}`)
+    return this.httpGet(`v1/messages/${rawUrlEncode(messageId)}`)
   }
 
   media(messageId: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/media/${messageId}`)
+    return this.httpGet(`v1/media/${rawUrlEncode(messageId)}`)
   }
 
   send(
@@ -35,7 +35,7 @@ export class Messages extends Resource {
     payload: Record<string, unknown>,
     idempotencyKey?: string,
   ): Promise<Result<Record<string, unknown>>> {
-    return this.result('POST', `v1/sessions/${sessionId}/messages`, payload, this.withIdempotency(idempotencyKey))
+    return this.result('POST', `v1/sessions/${rawUrlEncode(sessionId)}/messages`, payload, this.withIdempotency(idempotencyKey))
   }
 
   sendText(sessionId: number | string, to: string, text: string, options: SendOptions = {}): Promise<Result<Record<string, unknown>>> {

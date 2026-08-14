@@ -1,4 +1,4 @@
-import { Resource } from './base'
+import { Resource, rawUrlEncode } from './base'
 import type { Paginator } from '../pagination'
 
 export class Contacts extends Resource {
@@ -15,14 +15,14 @@ export class Contacts extends Resource {
   }
 
   get(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/contacts/${id}`)
+    return this.httpGet(`v1/contacts/${rawUrlEncode(id)}`)
   }
 
   update(id: number | string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.httpPatch(`v1/contacts/${id}`, payload)
+    return this.httpPatch(`v1/contacts/${rawUrlEncode(id)}`, payload)
   }
 
   delete(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpDelete(`v1/contacts/${id}`)
+    return this.httpDelete(`v1/contacts/${rawUrlEncode(id)}`)
   }
 }

@@ -1,4 +1,4 @@
-import { Resource } from './base'
+import { Resource, rawUrlEncode } from './base'
 import type { Paginator } from '../pagination'
 
 export class ScheduledMessages extends Resource {
@@ -7,10 +7,10 @@ export class ScheduledMessages extends Resource {
   }
 
   get(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/scheduled-messages/${id}`)
+    return this.httpGet(`v1/scheduled-messages/${rawUrlEncode(id)}`)
   }
 
   cancel(id: number | string): Promise<Record<string, unknown>> {
-    return this.httpDelete(`v1/scheduled-messages/${id}`)
+    return this.httpDelete(`v1/scheduled-messages/${rawUrlEncode(id)}`)
   }
 }
