@@ -38,4 +38,23 @@ describe('build output', () => {
     expect(dts).toContain('WhatsDevClient')
     expect(dts).toContain('verifyWebhookSignature')
   })
+
+  // files: ["dist"] with main/module/types pointing into dist/, and dist/ is gitignored and
+  // untracked: npm publish without a manual build first ships a package whose every entry point
+  // 404s, and nothing otherwise binds the published bytes to the reviewed src/.
+  it('binds the published artifact to the reviewed source with prepublishOnly', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      main: string
+      module: string
+      types: string
+      scripts: Record<string, string | undefined>
+    }
+
+    expect(manifest.scripts.prepublishOnly, 'npm publish would ship an unbuilt dist/.').toBeDefined()
+    expect(manifest.scripts.prepublishOnly).toContain('build')
+
+    for (const entry of [manifest.main, manifest.module, manifest.types]) {
+      expect(entry.startsWith('./dist/')).toBe(true)
+    }
+  })
 })
