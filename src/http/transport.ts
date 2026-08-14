@@ -22,6 +22,25 @@ export function uuidv4(): string {
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const RETRY_STATUSES = new Set([429, 502, 503, 504])
+const MAX_RETRY_AFTER_SECONDS = 60
+// Deliberately not Number(): that reads '0x1A' as 26 and ' ' as 0, where PHP's is_numeric() —
+// the sibling package's gate — reads neither as a number at all.
+const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
+
+/**
+ * The sleeper is not reachable from the public client, so a server's Retry-After would be honoured
+ * with no consumer override: 86400 freezes the caller for a day per retry, and a negative value
+ * made setTimeout fire immediately rather than wait. Outside the ceiling means the backoff ladder.
+ */
+function honouredRetryAfter(retryAfter: string | null): number | null {
+  if (retryAfter === null || !NUMERIC.test(retryAfter.trim())) {
+    return null
+  }
+
+  const seconds = Number(retryAfter)
+
+  return Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_RETRY_AFTER_SECONDS ? seconds : null
+}
 
 export class Transport {
   constructor(
@@ -168,8 +187,7 @@ export class Transport {
   }
 
   private async pause(attempt: number, retryAfter: string | null): Promise<void> {
-    const numeric = retryAfter !== null && retryAfter !== '' && !Number.isNaN(Number(retryAfter)) ? Number(retryAfter) : null
-    const seconds = numeric ?? Math.min(2 ** attempt, 8)
+    const seconds = honouredRetryAfter(retryAfter) ?? Math.min(2 ** attempt, 8)
 
     await this.sleep(seconds * 1000 + Math.random() * 250)
   }

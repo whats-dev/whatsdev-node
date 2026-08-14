@@ -128,6 +128,48 @@ describe('Transport additional coverage', () => {
     expect(slept[0]!).toBeLessThanOrEqual(2_250)
   })
 
+  // The sleeper is a private constructor argument, so a consumer has no override: one misbehaving
+  // proxy in front of the API would otherwise freeze every integration, and a negative value made
+  // setTimeout fire immediately rather than wait at all.
+  it.each([
+    ['a full day', '86400'],
+    ['one second past the ceiling', '61'],
+    ['negative', '-1'],
+    ['an absurd exponent', '1e30'],
+    ['an HTTP-date rather than a delay', 'Wed, 21 Oct 2026 07:28:00 GMT'],
+    ['not a number at all', 'soon'],
+  ])('falls back to the backoff ladder rather than honour an out-of-range Retry-After (%s)', async (_label, retryAfter) => {
+    const { fetch } = stubFetch([
+      { status: 429, body: { error: { code: 'quota_exceeded', message: 'No.' } }, headers: { 'Retry-After': retryAfter } },
+      { status: 200, body: { ok: true } },
+    ])
+    const { client, slept } = withSleep(fetch)
+
+    await client.request('GET', 'v1/me')
+
+    expect(slept).toHaveLength(1)
+    expect(slept[0]!).toBeGreaterThanOrEqual(1_000)
+    expect(slept[0]!).toBeLessThanOrEqual(1_250)
+  })
+
+  it.each([
+    ['zero', '0', 0, 250],
+    ['a plain delay', '5', 5_000, 5_250],
+    ['the ceiling itself', '60', 60_000, 60_250],
+  ])('honours a Retry-After inside the ceiling (%s)', async (_label, retryAfter, least, most) => {
+    const { fetch } = stubFetch([
+      { status: 429, body: { error: { code: 'quota_exceeded', message: 'No.' } }, headers: { 'Retry-After': String(retryAfter) } },
+      { status: 200, body: { ok: true } },
+    ])
+    const { client, slept } = withSleep(fetch)
+
+    await client.request('GET', 'v1/me')
+
+    expect(slept).toHaveLength(1)
+    expect(slept[0]!).toBeGreaterThanOrEqual(Number(least))
+    expect(slept[0]!).toBeLessThanOrEqual(Number(most))
+  })
+
   it('backs off exponentially rather than at a constant delay when there is no Retry-After', async () => {
     const { fetch } = stubFetch([{ status: 503, body: { error: { code: 'service_unavailable', message: 'Down.' } } }])
     const { client, slept } = withSleep(fetch, { maxRetries: 2 })
