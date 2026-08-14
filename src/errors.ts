@@ -21,9 +21,16 @@ export class MissingWebhookSecretError extends WhatsDevError {}
 
 /**
  * Caller input, not a transport failure: thrown before the request is sent, where a rejected
- * header used to surface as a ConnectionError — a misleading type for a value the caller chose.
+ * header used to surface as a ConnectionError — a misleading type for a value the caller chose,
+ * and one the transport then retried with backoff as though the network were at fault.
  */
-export class InvalidIdempotencyKeyError extends WhatsDevError {}
+export class InvalidHeaderError extends WhatsDevError {}
+
+/**
+ * The one header whose corruption defeats a mechanism rather than merely a request, so it keeps
+ * its own type and message under the general one.
+ */
+export class InvalidIdempotencyKeyError extends InvalidHeaderError {}
 
 export class ApiError extends WhatsDevError {
   readonly code: string

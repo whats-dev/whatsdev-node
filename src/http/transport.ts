@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { isNumeric } from '../coerce'
 import type { ResolvedConfig } from '../config'
-import { ConnectionError, errorFromResponse, InvalidIdempotencyKeyError, UnexpectedRedirectError } from '../errors'
+import { ConnectionError, errorFromResponse, InvalidHeaderError, InvalidIdempotencyKeyError, UnexpectedRedirectError } from '../errors'
 import { VERSION } from '../version'
 
 export interface RequestOptions {
@@ -36,8 +36,9 @@ export function emptyWhenAbsent<T>(body: T | null | undefined): T {
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const RETRY_STATUSES = new Set([429, 502, 503, 504])
 const MAX_RETRY_AFTER_SECONDS = 60
-// Mirrors the sibling package's /[\x00-\x1F\x7F]/: C0 controls plus DEL, tab included.
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
+// Mirrors the sibling package's /[^\x20-\x7E]/: anything outside printable ASCII. undici rejects
+// a value above U+00FF with a ByteString TypeError, and cURL truncates one at a control character.
+const UNSENDABLE = /[^\u0020-\u007E]/
 
 /**
  * The sleeper is not reachable from the public client, so a server's Retry-After would be honoured
@@ -55,18 +56,28 @@ function honouredRetryAfter(retryAfter: string | null): number | null {
 }
 
 /**
- * fetch rejects a header value carrying a control character, and the failure came back wrapped as
- * a ConnectionError — a misleading type for caller input, and only after the request was
- * attempted. PHP's cURL silently truncated the same key instead, leaving caller and server holding
- * different keys, which is precisely what deduplication cannot survive.
+ * fetch rejects such a header value with a TypeError, which the catch around fetch wrapped as a
+ * ConnectionError — a misleading type for caller input, raised only after the request was
+ * attempted and then retried with backoff as though the network were at fault. PHP's cURL
+ * silently truncates the same value instead, so the server reads a header nobody wrote.
+ *
+ * The message names the header, never its value: Authorization is a header too.
  */
-function assertSendableIdempotencyKey(headers: Record<string, string>): void {
+function assertSendableHeaders(headers: Record<string, string>): void {
   for (const [name, value] of Object.entries(headers)) {
-    if (name.toLowerCase() === 'idempotency-key' && CONTROL_CHARACTERS.test(String(value))) {
+    if (!UNSENDABLE.test(String(value))) {
+      continue
+    }
+
+    if (name.toLowerCase() === 'idempotency-key') {
       throw new InvalidIdempotencyKeyError(
-        'The Idempotency-Key contains a control character, so it cannot be sent unchanged. Use printable characters only.',
+        'The Idempotency-Key contains a character that cannot be sent unchanged in an HTTP header. Use printable ASCII only.',
       )
     }
+
+    throw new InvalidHeaderError(
+      `The ${name} header contains a character that cannot be sent unchanged in an HTTP header. Use printable ASCII only.`,
+    )
   }
 }
 
@@ -262,7 +273,7 @@ export class Transport {
     // Caller-set headers win: an explicit Idempotency-Key or a per-call override must survive.
     const merged = { ...headers, ...options.headers }
 
-    assertSendableIdempotencyKey(merged)
+    assertSendableHeaders(merged)
 
     return merged
   }

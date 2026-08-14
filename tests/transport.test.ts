@@ -3,6 +3,7 @@ import { Transport } from '../src/http/transport'
 import { resolveConfig } from '../src/config'
 import {
   ConnectionError,
+  InvalidHeaderError,
   InvalidIdempotencyKeyError,
   QuotaExceededError,
   ValidationFailedError,
@@ -353,5 +354,71 @@ describe('Transport timeouts', () => {
     const response = await transport(abortAware, { timeout: 30_000 }).request<{ ok: boolean }>('GET', 'v1/me')
 
     expect(response.body.ok).toBe(true)
+  })
+})
+
+/**
+ * The idempotency key was only the first caller-supplied header value to be checked. Every other
+ * one runs the same hazard: undici rejects a non-ASCII value with a ByteString TypeError, which
+ * the catch around fetch wrapped as a ConnectionError — a network fault, retried with backoff,
+ * for what is caller input. The sibling package's cURL truncates the same value instead, so the
+ * server reads a header the caller never wrote. Both now refuse before anything is sent.
+ */
+describe('Transport header validation', () => {
+  it.each([
+    ['a bare newline', 'abc\n'],
+    ['the header-injection shape', 'abc\r\nX-Injected: yes'],
+    ['a null byte', 'abc\u0000'],
+    ['a tab', 'a\tb'],
+    ['a delete character', 'abc\u007F'],
+    ['a non-ascii letter', 'café'],
+    ['an emoji', '✅'],
+  ])('rejects a header value the wire cannot carry unchanged (%s)', async (_label, value) => {
+    const { fetch, calls } = stubFetch([{ status: 200, body: { ok: true } }])
+
+    await expect(transport(fetch).request('GET', 'v1/me', { headers: { 'X-Trace': value } })).rejects.toBeInstanceOf(
+      InvalidHeaderError,
+    )
+    expect(calls, 'The request went out before the header was checked.').toHaveLength(0)
+  })
+
+  it('names the header but never echoes its value, which may be a credential', async () => {
+    const { fetch } = stubFetch([{ status: 200, body: { ok: true } }])
+    const failing = () => transport(fetch).request('GET', 'v1/me', { headers: { 'X-Trace': 'sk_live_secret\n' } })
+
+    await expect(failing()).rejects.toThrow(/X-Trace/)
+    await expect(failing()).rejects.not.toThrow(/sk_live_secret/)
+  })
+
+  it.each([
+    ['a control character', 'order-42\n'],
+    ['a non-ascii letter', 'order-42-café'],
+  ])('rejects a bad idempotency key with its own error, which is an InvalidHeaderError too (%s)', async (_label, key) => {
+    const { fetch, calls } = stubFetch([{ status: 201, body: { id: 1 } }])
+    const failing = () =>
+      transport(fetch).request('POST', 'v1/sessions/1/messages', { body: { to: '1' }, idempotencyKey: key })
+
+    await expect(failing()).rejects.toBeInstanceOf(InvalidIdempotencyKeyError)
+    await expect(failing()).rejects.toBeInstanceOf(InvalidHeaderError)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('never retries a rejected header, because it is not a network fault', async () => {
+    const { fetch, calls } = stubFetch([{ status: 200, body: { ok: true } }])
+
+    await expect(
+      transport(fetch, { maxRetries: 3 }).request('GET', 'v1/me', { headers: { 'X-Trace': 'café' } }),
+    ).rejects.toBeInstanceOf(InvalidHeaderError)
+    expect(calls).toHaveLength(0)
+  })
+
+  it('still accepts every printable ascii header value', async () => {
+    const { fetch, calls } = stubFetch([{ status: 200, body: { ok: true } }])
+
+    await transport(fetch).request('GET', 'v1/me', {
+      headers: { 'X-Trace': ' !"#$%&\'()*+,-./0-9:;<=>?@A-Z[\\]^_`a-z{|}~' },
+    })
+
+    expect(calls).toHaveLength(1)
   })
 })
