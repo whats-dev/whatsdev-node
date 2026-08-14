@@ -15,7 +15,9 @@ import { Templates } from './resources/templates'
 import { Webhooks } from './resources/webhooks'
 
 export class WhatsDevClient {
-  readonly config: ResolvedConfig
+  // Held privately and read through a prototype getter: an own property lands in
+  // JSON.stringify(client) and console.log(client), and the config carries a live API key.
+  readonly #config: ResolvedConfig
 
   readonly account: Account
   readonly sessions: Sessions
@@ -33,9 +35,13 @@ export class WhatsDevClient {
 
   private readonly transport: Transport
 
+  get config(): ResolvedConfig {
+    return this.#config
+  }
+
   constructor(options: ClientOptions | string) {
-    this.config = resolveConfig(options)
-    this.transport = new Transport(this.config, typeof options === 'string' ? undefined : options.fetch)
+    this.#config = resolveConfig(options)
+    this.transport = new Transport(this.#config, typeof options === 'string' ? undefined : options.fetch)
 
     this.account = new Account(this.transport)
     this.sessions = new Sessions(this.transport)

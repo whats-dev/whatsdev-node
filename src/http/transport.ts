@@ -43,21 +43,27 @@ function honouredRetryAfter(retryAfter: string | null): number | null {
 }
 
 export class Transport {
+  // Every resource holds a transport, so a TypeScript-private (but runtime-enumerable) config
+  // would put the API key in JSON.stringify(client) once per resource. #config is private for real.
+  readonly #config: ResolvedConfig
+
   constructor(
-    private readonly config: ResolvedConfig,
+    config: ResolvedConfig,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-  ) {}
+  ) {
+    this.#config = config
+  }
 
   get baseUrl(): string {
-    return this.config.baseUrl
+    return this.#config.baseUrl
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
     const upperMethod = method.toUpperCase()
     const headers = this.buildHeaders(upperMethod, options)
     const url = this.buildUrl(path, options.query)
-    const attempts = 1 + Math.max(0, this.config.maxRetries)
+    const attempts = 1 + Math.max(0, this.#config.maxRetries)
     let lastError: unknown = null
 
     for (let attempt = 0; attempt < attempts; attempt++) {
@@ -103,7 +109,7 @@ export class Transport {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(this.config.timeout),
+        signal: AbortSignal.timeout(this.#config.timeout),
       })
     } catch (err) {
       throw new ConnectionError(err instanceof Error ? err.message : 'The request could not be completed.')
@@ -130,10 +136,10 @@ export class Transport {
 
   private buildHeaders(method: string, options: RequestOptions): Record<string, string> {
     const defaults: Record<string, string> = {
-      Authorization: `Bearer ${this.config.apiKey}`,
+      Authorization: `Bearer ${this.#config.apiKey}`,
       Accept: 'application/json',
       'User-Agent': `whatsdev-node/${VERSION} node/${process.version}`,
-      ...this.config.headers,
+      ...this.#config.headers,
     }
 
     if (options.body !== undefined) {
@@ -151,7 +157,7 @@ export class Transport {
   }
 
   private buildUrl(path: string, query?: Record<string, unknown>): string {
-    const base = this.config.baseUrl.replace(/\/+$/, '')
+    const base = this.#config.baseUrl.replace(/\/+$/, '')
     const url = `${base}/${path.replace(/^\/+/, '')}`
 
     if (!query) {
