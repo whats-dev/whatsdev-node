@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { isNumeric } from '../coerce'
 import type { ResolvedConfig } from '../config'
 import { ConnectionError, errorFromResponse, InvalidIdempotencyKeyError, UnexpectedRedirectError } from '../errors'
 import { VERSION } from '../version'
@@ -35,9 +36,6 @@ export function emptyWhenAbsent<T>(body: T | null | undefined): T {
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const RETRY_STATUSES = new Set([429, 502, 503, 504])
 const MAX_RETRY_AFTER_SECONDS = 60
-// Deliberately not Number(): that reads '0x1A' as 26 and ' ' as 0, where PHP's is_numeric() —
-// the sibling package's gate — reads neither as a number at all.
-const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
 // Mirrors the sibling package's /[\x00-\x1F\x7F]/: C0 controls plus DEL, tab included.
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
 
@@ -47,7 +45,7 @@ const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
  * made setTimeout fire immediately rather than wait. Outside the ceiling means the backoff ladder.
  */
 function honouredRetryAfter(retryAfter: string | null): number | null {
-  if (retryAfter === null || !NUMERIC.test(retryAfter.trim())) {
+  if (retryAfter === null || !isNumeric(retryAfter)) {
     return null
   }
 

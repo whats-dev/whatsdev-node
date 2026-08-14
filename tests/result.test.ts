@@ -45,3 +45,32 @@ describe('resultFromResponse', () => {
     expect(result.data).toEqual({ data: { id: 9 } })
   })
 })
+
+/**
+ * The twin of the PHP package's quota-header table. A remaining-count is a whole number, and
+ * is_numeric() is the gate over there: '0x10' is not a number to that parser and 12.7 truncates.
+ * Number() read '12.7' as 12.7 and '0x10' as 16.
+ */
+describe('quota header parsing', () => {
+  it.each([
+    ['a plain count', '12', 12],
+    ['a fractional count truncates', '12.7', 12],
+    ['a negative count', '-5', -5],
+    ['leading zeroes', '00012', 12],
+    ['an exponent', '1e3', 1000],
+    ['a leading plus', '+7', 7],
+    ['surrounding whitespace', ' 12 ', 12],
+    ['a fraction below one', '.5', 0],
+    ['hexadecimal is not a number', '0x10', null],
+    ['a word', 'abc', null],
+    ['digits with a suffix', '12abc', null],
+    ['an underscore separator', '1_0', null],
+    ['empty', '', null],
+  ])('parses %s', async (_name, header, expected) => {
+    const { fetch } = stubFetch([{ status: 200, body: { id: 1 }, headers: { 'X-Quota-Daily-Remaining': header } }])
+
+    const result = resultFromResponse(await makeTransport(fetch).request('GET', 'v1/me'))
+
+    expect(result.quotaDailyRemaining).toBe(expected)
+  })
+})

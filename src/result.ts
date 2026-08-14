@@ -1,3 +1,4 @@
+import { isNumeric, toInteger } from './coerce'
 import { emptyWhenAbsent } from './http/transport'
 import type { ApiResponse } from './http/transport'
 
@@ -15,12 +16,14 @@ export function resultFromResponse<T>(response: ApiResponse<T>): Result<T> {
 
   return {
     data: emptyWhenAbsent(response.body),
-    quotaDailyRemaining: isNumeric(daily) ? Number(daily) : null,
-    quotaMonthlyRemaining: isNumeric(monthly) ? Number(monthly) : null,
+    quotaDailyRemaining: quota(daily),
+    quotaMonthlyRemaining: quota(monthly),
     requestId: response.headers.get('X-Request-Id'),
   }
 }
 
-function isNumeric(value: string | null): value is string {
-  return value !== null && value !== '' && !Number.isNaN(Number(value))
+// A remaining-count is a whole number. Number() alone read '12.7' as 12.7 and '0x10' as 16,
+// where the sibling package's is_numeric() gate plus (int) cast reads 12 and nothing at all.
+function quota(header: string | null): number | null {
+  return header !== null && isNumeric(header) ? toInteger(header) : null
 }
