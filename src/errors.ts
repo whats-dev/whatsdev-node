@@ -1,3 +1,5 @@
+import { detailInt, detailList, detailNullableInt, detailNullableString, detailStringList } from './coerce'
+
 export class WhatsDevError extends Error {
   constructor(message: string) {
     super(message)
@@ -99,9 +101,9 @@ export class QuotaInsufficientError extends ApiError {
 
   constructor(message: string, code: string, status: number, details: Record<string, unknown> = {}, requestId?: string) {
     super(message, code, status, details, requestId)
-    this.requested = Number(details.requested ?? 0)
-    this.remainingDaily = Number(details.remaining_daily ?? 0)
-    this.remainingMonthly = Number(details.remaining_monthly ?? 0)
+    this.requested = detailInt(details, 'requested')
+    this.remainingDaily = detailInt(details, 'remaining_daily')
+    this.remainingMonthly = detailInt(details, 'remaining_monthly')
   }
 }
 
@@ -112,9 +114,9 @@ export class TemplateVariablesMissingError extends ApiError {
 
   constructor(message: string, code: string, status: number, details: Record<string, unknown> = {}, requestId?: string) {
     super(message, code, status, details, requestId)
-    this.missingCount = Number(details.missing_count ?? 0)
-    this.missingVariables = (details.missing_variables as string[] | undefined) ?? []
-    this.sample = details.sample != null ? String(details.sample) : null
+    this.missingCount = detailInt(details, 'missing_count')
+    this.missingVariables = detailStringList(details, 'missing_variables')
+    this.sample = detailNullableString(details, 'sample')
   }
 }
 
@@ -123,7 +125,7 @@ export class DailyCapReachedError extends ApiError {
 
   constructor(message: string, code: string, status: number, details: Record<string, unknown> = {}, requestId?: string) {
     super(message, code, status, details, requestId)
-    this.retryAfter = details.retry_after != null ? Number(details.retry_after) : null
+    this.retryAfter = detailNullableInt(details, 'retry_after')
   }
 }
 
@@ -132,7 +134,7 @@ export class ListNotFoundError extends ApiError {
 
   constructor(message: string, code: string, status: number, details: Record<string, unknown> = {}, requestId?: string) {
     super(message, code, status, details, requestId)
-    this.listIds = (details.list_ids as unknown[] | undefined) ?? []
+    this.listIds = detailList(details, 'list_ids')
   }
 }
 
@@ -141,7 +143,7 @@ export class FeatureNotSupportedError extends ApiError {
 
   constructor(message: string, code: string, status: number, details: Record<string, unknown> = {}, requestId?: string) {
     super(message, code, status, details, requestId)
-    this.feature = details.feature != null ? String(details.feature) : null
+    this.feature = detailNullableString(details, 'feature')
   }
 }
 
@@ -202,9 +204,17 @@ export function errorFromResponse(status: number, body: unknown, requestId?: str
   const envelope = (body as { error?: Record<string, unknown> } | null)?.error
   const code = typeof envelope?.code === 'string' ? envelope.code : 'http_error'
   const message = typeof envelope?.message === 'string' ? envelope.message : `The API returned HTTP ${status}.`
-  const details = (envelope?.details ?? {}) as Record<string, unknown>
+  // is_array() is the sibling package's gate, and a JSON list decodes to an array there — so a
+  // list passes here too, while a string, a number and a bool are dropped for an empty map. Left
+  // unguarded, `details: "oops"` made e.errors a string typed Record<string, string[]>, and
+  // Object.entries() on it yielded character-index pairs instead of field names.
+  const details = isDetailMap(envelope?.details) ? envelope.details : {}
 
   const Constructor = ERRORS[code] ?? ApiError
 
   return new Constructor(message, code, status, details, requestId)
+}
+
+function isDetailMap(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
