@@ -1,5 +1,7 @@
 import { emptyWhenAbsent, uuidv4 } from '../http/transport'
 import type { Transport } from '../http/transport'
+import { mediaFileFromResponse } from '../media'
+import type { MediaFile } from '../media'
 import { Paginator } from '../pagination'
 import { resultFromResponse } from '../result'
 import type { Result } from '../result'
@@ -23,6 +25,12 @@ export abstract class Resource {
   protected async httpGet<T = Record<string, unknown>>(path: string, query?: Record<string, unknown>): Promise<T> {
     const response = await this.transport.request<T>('GET', path, { query })
     return emptyWhenAbsent(response.body)
+  }
+
+  // A binary endpoint: the bytes are the answer, so nothing here goes through JSON decoding.
+  protected async download(path: string, query?: Record<string, unknown>): Promise<MediaFile> {
+    const response = await this.transport.request<unknown>('GET', path, { query })
+    return mediaFileFromResponse(response)
   }
 
   protected async httpPost<T = Record<string, unknown>>(

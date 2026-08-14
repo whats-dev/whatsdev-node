@@ -1,4 +1,5 @@
 import { Resource, rawUrlEncode } from './base'
+import type { MediaFile } from '../media'
 import type { Paginator } from '../pagination'
 import type { Result } from '../result'
 import type { LocationPayload, MediaPayload, PollPayload, SendOptions } from '../types'
@@ -26,8 +27,9 @@ export class Messages extends Resource {
     return this.httpGet(`v1/messages/${rawUrlEncode(messageId)}`)
   }
 
-  media(messageId: number | string): Promise<Record<string, unknown>> {
-    return this.httpGet(`v1/media/${rawUrlEncode(messageId)}`)
+  // Downloads the stored file for an inbound media message; the bytes, not a JSON envelope.
+  media(messageId: number | string): Promise<MediaFile> {
+    return this.download(`v1/media/${rawUrlEncode(messageId)}`)
   }
 
   send(

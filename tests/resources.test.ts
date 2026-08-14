@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WhatsDevClient } from '../src/client'
+import { MediaNotAvailableError } from '../src/errors'
 import { stubFetch, type StubResponse } from './support/stubFetch'
 
 const BASE = 'https://whats.youdev.online'
@@ -244,6 +245,41 @@ describe('messages', () => {
 
     expect(calls[0]!.method).toBe('GET')
     expect(calls[0]!.url).toBe(`${BASE}/v1/media/9`)
+  })
+
+  // The endpoint streams the stored file, so JSON decoding it discards the only thing the caller
+  // asked for. These pin that media() hands back the bytes themselves.
+  it('hands back the raw bytes and the content type of a downloaded file', async () => {
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0x00, 0xc3, 0x28])
+    const fetchImpl = (async () =>
+      new Response(bytes, { status: 200, headers: { 'Content-Type': 'image/png' } })) as typeof fetch
+    const client = new WhatsDevClient({ apiKey: 'k', fetch: fetchImpl })
+
+    const file = await client.messages.media(9)
+
+    // 0xC3 0x28 is invalid UTF-8: decoding to text would replace it and the bytes would not survive.
+    expect(file.bytes).toEqual(bytes)
+    expect(file.bytes.byteLength).toBe(bytes.byteLength)
+    expect(file.contentType).toBe('image/png')
+  })
+
+  it('leaves the content type null when the server does not name one', async () => {
+    const fetchImpl = (async () => new Response(new Uint8Array([1, 2]), { status: 200 })) as typeof fetch
+    const client = new WhatsDevClient({ apiKey: 'k', fetch: fetchImpl })
+
+    expect((await client.messages.media(9)).contentType).toBeNull()
+  })
+
+  it('does not lose bytes that happen to parse as json', async () => {
+    const { client } = setup({ status: 200, body: { a: 1 } })
+
+    expect(new TextDecoder().decode((await client.messages.media(9)).bytes)).toBe('{"a":1}')
+  })
+
+  it('still raises the typed error when the media has expired', async () => {
+    const { client } = setup({ status: 410, body: { error: { code: 'media_not_available', message: 'gone' } } })
+
+    await expect(client.messages.media(9)).rejects.toBeInstanceOf(MediaNotAvailableError)
   })
 
   it.each([

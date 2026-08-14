@@ -14,6 +14,9 @@ export interface ApiResponse<T = unknown> {
   status: number
   headers: Headers
   body: T
+  // The undecoded payload. GET /v1/media/{message} streams a stored file, so for that one endpoint
+  // the bytes are the answer and the JSON decode above them has nothing to work with.
+  bytes: Uint8Array
 }
 
 export function uuidv4(): string {
@@ -169,10 +172,12 @@ export class Transport {
       throw redirected(response)
     }
 
-    let text: string
+    // Read as bytes, not text: response.text() decodes UTF-8 and replaces every invalid sequence,
+    // which is lossy for the one endpoint that streams a file rather than answering JSON.
+    let bytes: Uint8Array
 
     try {
-      text = await response.text()
+      bytes = new Uint8Array(await response.arrayBuffer())
     } catch (err) {
       throw new ConnectionError(err instanceof Error ? err.message : 'The response body could not be read.')
     }
@@ -180,12 +185,12 @@ export class Transport {
     // A non-JSON body (e.g. an empty 204) decodes to undefined rather than throwing.
     let body_: unknown
     try {
-      body_ = text === '' ? undefined : JSON.parse(text)
+      body_ = bytes.byteLength === 0 ? undefined : JSON.parse(new TextDecoder().decode(bytes))
     } catch {
       body_ = undefined
     }
 
-    return { status: response.status, headers: response.headers, body: body_ }
+    return { status: response.status, headers: response.headers, body: body_, bytes }
   }
 
   private buildHeaders(method: string, options: RequestOptions): Record<string, string> {
