@@ -1,4 +1,4 @@
-import { uuidv4 } from '../http/transport'
+import { emptyWhenAbsent, uuidv4 } from '../http/transport'
 import type { Transport } from '../http/transport'
 import { Paginator } from '../pagination'
 import { resultFromResponse } from '../result'
@@ -22,7 +22,7 @@ export abstract class Resource {
 
   protected async httpGet<T = Record<string, unknown>>(path: string, query?: Record<string, unknown>): Promise<T> {
     const response = await this.transport.request<T>('GET', path, { query })
-    return response.body
+    return emptyWhenAbsent(response.body)
   }
 
   protected async httpPost<T = Record<string, unknown>>(
@@ -32,17 +32,17 @@ export abstract class Resource {
     query?: Record<string, unknown>,
   ): Promise<T> {
     const response = await this.transport.request<T>('POST', path, { body, headers, query })
-    return response.body
+    return emptyWhenAbsent(response.body)
   }
 
   protected async httpPut<T = Record<string, unknown>>(path: string, body?: unknown): Promise<T> {
     const response = await this.transport.request<T>('PUT', path, { body })
-    return response.body
+    return emptyWhenAbsent(response.body)
   }
 
   protected async httpPatch<T = Record<string, unknown>>(path: string, body?: unknown): Promise<T> {
     const response = await this.transport.request<T>('PATCH', path, { body })
-    return response.body
+    return emptyWhenAbsent(response.body)
   }
 
   protected async httpDelete<T = Record<string, unknown>>(
@@ -51,7 +51,7 @@ export abstract class Resource {
     query?: Record<string, unknown>,
   ): Promise<T> {
     const response = await this.transport.request<T>('DELETE', path, { body, query })
-    return response.body
+    return emptyWhenAbsent(response.body)
   }
 
   protected async result<T = Record<string, unknown>>(

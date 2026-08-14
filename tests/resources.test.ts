@@ -857,3 +857,49 @@ describe('sandbox', () => {
     expect(calls[0]!.body).toEqual({ session_id: 3, from: '967700000000', text: 'hello' })
   })
 })
+
+// Five endpoints answer 204 with no body at all, and the declared return type of every resource
+// method is Record<string, unknown>. Handing back undefined makes that type a lie TypeScript
+// cannot warn about: Object.keys(await client.contacts.delete(1)) throws at runtime instead.
+describe('no content', () => {
+  const noContent = (): StubResponse => ({ status: 204 })
+
+  it.each([
+    ['suppressions.delete', (client: WhatsDevClient) => client.suppressions.delete('967700000000')],
+    ['templates.delete', (client: WhatsDevClient) => client.templates.delete(1)],
+    ['contactLists.delete', (client: WhatsDevClient) => client.contactLists.delete(1)],
+    ['contacts.delete', (client: WhatsDevClient) => client.contacts.delete(1)],
+    ['contactFields.delete', (client: WhatsDevClient) => client.contactFields.delete(1)],
+  ])('returns an empty object from %s on a 204', async (_name, call) => {
+    const { client, calls } = setup(noContent())
+
+    const body = await call(client)
+
+    expect(body).toEqual({})
+    expect(Object.keys(body)).toEqual([])
+    expect(calls).toHaveLength(1)
+  })
+
+  it('returns an empty object from the escape hatch on a 204', async () => {
+    const { client } = setup(noContent())
+
+    expect(await client.request('DELETE', 'v1/sessions/7/groups/g1')).toEqual({})
+  })
+
+  it('returns an empty object from a body that is not json at all', async () => {
+    const fetchImpl = (async () =>
+      new Response('not json', { status: 200, headers: { 'Content-Type': 'text/plain' } })) as typeof fetch
+    const client = new WhatsDevClient({ apiKey: 'k', fetch: fetchImpl })
+
+    expect(await client.account.me()).toEqual({})
+  })
+
+  it('carries an empty object as a Result data on a 204', async () => {
+    const { client } = setup({ status: 204, headers: { 'X-Request-Id': 'req-9' } })
+
+    const result = await client.messages.send(3, { to: '1' })
+
+    expect(result.data).toEqual({})
+    expect(result.requestId).toBe('req-9')
+  })
+})

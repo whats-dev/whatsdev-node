@@ -20,6 +20,15 @@ export function uuidv4(): string {
   return randomUUID()
 }
 
+/**
+ * A 204 and a non-JSON payload both decode to undefined, while every resource method declares an
+ * object return — so handing undefined back makes that declaration a lie TypeScript cannot warn
+ * about, and Object.keys() on it throws. {} is the mirror of the sibling package's [].
+ */
+export function emptyWhenAbsent<T>(body: T | null | undefined): T {
+  return body ?? ({} as T)
+}
+
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const RETRY_STATUSES = new Set([429, 502, 503, 504])
 const MAX_RETRY_AFTER_SECONDS = 60

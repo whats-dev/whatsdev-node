@@ -1,3 +1,4 @@
+import { emptyWhenAbsent } from './http/transport'
 import type { ApiResponse } from './http/transport'
 
 export interface Result<T> {
@@ -13,7 +14,7 @@ export function resultFromResponse<T>(response: ApiResponse<T>): Result<T> {
   const monthly = response.headers.get('X-Quota-Monthly-Remaining')
 
   return {
-    data: response.body,
+    data: emptyWhenAbsent(response.body),
     quotaDailyRemaining: isNumeric(daily) ? Number(daily) : null,
     quotaMonthlyRemaining: isNumeric(monthly) ? Number(monthly) : null,
     requestId: response.headers.get('X-Request-Id'),

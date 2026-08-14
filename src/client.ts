@@ -1,5 +1,5 @@
 import { resolveConfig, type ClientOptions, type ResolvedConfig } from './config'
-import { Transport, type RequestOptions } from './http/transport'
+import { emptyWhenAbsent, Transport, type RequestOptions } from './http/transport'
 import { Account } from './resources/account'
 import { Bulk } from './resources/bulk'
 import { ContactFields } from './resources/contactFields'
@@ -65,6 +65,6 @@ export class WhatsDevClient {
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const response = await this.transport.request<T>(method, path, options)
 
-    return response.body
+    return emptyWhenAbsent(response.body)
   }
 }
