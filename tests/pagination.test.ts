@@ -58,6 +58,26 @@ describe('pageFromResponse', () => {
 
     expect(page.hasMore).toBe(false)
   })
+
+  // A data envelope that arrives as a JSON object rather than a list still yields its members,
+  // rather than reading as an empty page. Pinned on both sides so they cannot drift apart.
+  it('yields the values of a data envelope that is a map', async () => {
+    const { fetch } = stubFetch([
+      { status: 200, body: { data: { first: { id: 1 }, second: { id: 2 } }, links: { next: null }, meta: {} } },
+    ])
+
+    const page = pageFromResponse<{ id: number }>(await makeTransport(fetch).request('GET', 'v1/contacts'))
+
+    expect(page.data).toEqual([{ id: 1 }, { id: 2 }])
+  })
+
+  it('reads a data envelope that is a scalar as an empty page', async () => {
+    const { fetch } = stubFetch([{ status: 200, body: { data: 'oops', links: { next: null }, meta: {} } }])
+
+    const page = pageFromResponse(await makeTransport(fetch).request('GET', 'v1/contacts'))
+
+    expect(page.data).toEqual([])
+  })
 })
 
 describe('Paginator', () => {

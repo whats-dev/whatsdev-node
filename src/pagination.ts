@@ -15,7 +15,9 @@ export function pageFromResponse<T>(response: ApiResponse<unknown>): Page<T> {
   const cursor = meta.next_cursor
 
   return {
-    data: Array.isArray(body.data) ? (body.data as T[]) : [],
+    // A data envelope that arrives as a JSON object yields its values, the way the sibling
+    // package's array_values() does — reading it as an empty page would lose the whole page.
+    data: itemsOf(body.data),
     meta,
     links,
     nextCursor: typeof cursor === 'string' ? cursor : null,
@@ -25,6 +27,14 @@ export function pageFromResponse<T>(response: ApiResponse<unknown>): Page<T> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function itemsOf<T>(data: unknown): T[] {
+  if (Array.isArray(data)) {
+    return data as T[]
+  }
+
+  return isRecord(data) ? (Object.values(data) as T[]) : []
 }
 
 // Parses a links.next URL's query string rather than rebuilding one, because the server
