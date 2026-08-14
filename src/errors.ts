@@ -32,6 +32,12 @@ export class ApiError extends WhatsDevError {
   }
 }
 
+/**
+ * Not in the ERRORS map below: the API never legitimately redirects, so a 3xx is something in
+ * front of it — a proxy, a stale base URL — and never an error code the server chose to return.
+ */
+export class UnexpectedRedirectError extends ApiError {}
+
 // Plain subclasses: no properties beyond ApiError's.
 export class AccountSuspendedError extends ApiError {}
 export class BadRequestError extends ApiError {}

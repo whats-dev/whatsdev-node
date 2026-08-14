@@ -3,6 +3,7 @@ export interface RecordedCall {
   method: string
   headers: Record<string, string>
   body: unknown
+  redirect?: RequestInit['redirect']
 }
 
 export interface StubResponse {
@@ -25,7 +26,7 @@ export function stubFetch(responses: StubEntry[]): { fetch: typeof fetch; calls:
     const rawBody = init?.body
     const body = typeof rawBody === 'string' ? parseBody(rawBody) : rawBody
 
-    calls.push({ url, method, headers, body })
+    calls.push({ url, method, headers, body, redirect: init?.redirect })
 
     const next = queue.length > 1 ? queue.shift()! : queue[0]
 

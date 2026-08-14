@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ResolvedConfig } from '../config'
-import { ConnectionError, errorFromResponse } from '../errors'
+import { ConnectionError, errorFromResponse, UnexpectedRedirectError } from '../errors'
 import { VERSION } from '../version'
 
 export interface RequestOptions {
@@ -40,6 +40,23 @@ function honouredRetryAfter(retryAfter: string | null): number | null {
   const seconds = Number(retryAfter)
 
   return Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_RETRY_AFTER_SECONDS ? seconds : null
+}
+
+/**
+ * The API never legitimately redirects, so a 3xx is an error like any other: catchable as an
+ * ApiError, naming the status and the Location it pointed at.
+ */
+function redirected(response: Response): UnexpectedRedirectError {
+  const location = response.headers.get('Location')
+
+  return new UnexpectedRedirectError(
+    `The API answered HTTP ${response.status} redirecting to ${location ?? 'an unnamed location'}. `
+      + 'This client does not follow redirects; check the base URL and anything proxying it.',
+    'unexpected_redirect',
+    response.status,
+    { location },
+    response.headers.get('X-Request-Id') ?? undefined,
+  )
 }
 
 export class Transport {
@@ -110,9 +127,19 @@ export class Transport {
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(this.#config.timeout),
+        // Left to itself, fetch follows a redirect and re-sends the whole POST body to the target.
+        // Only three methods attach an Idempotency-Key, so every other write would be re-executed
+        // with no dedup — the "sent twice" hazard, bypassed one layer below where the gate sits.
+        redirect: 'manual',
       })
     } catch (err) {
       throw new ConnectionError(err instanceof Error ? err.message : 'The request could not be completed.')
+    }
+
+    // status 0 with type 'opaqueredirect' is what a browser or edge runtime returns under
+    // redirect: 'manual'; Node hands back the real 3xx. Both mean the same thing here.
+    if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+      throw redirected(response)
     }
 
     let text: string
