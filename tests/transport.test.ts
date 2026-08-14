@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { Transport } from '../src/http/transport'
 import { resolveConfig } from '../src/config'
-import { ConnectionError, QuotaExceededError, ValidationFailedError } from '../src/errors'
+import {
+  ConnectionError,
+  InvalidIdempotencyKeyError,
+  QuotaExceededError,
+  ValidationFailedError,
+  WhatsDevError,
+} from '../src/errors'
 import { stubFetch } from './support/stubFetch'
 
 const transport = (fetchImpl: typeof fetch, overrides = {}) =>
@@ -229,6 +235,42 @@ describe('Transport additional coverage', () => {
       transport(fetch).request('POST', 'v1/sessions/1/messages', { body: { to: '1' }, headers: { 'Idempotency-Key': '' } }),
     ).rejects.toThrow()
     expect(calls).toHaveLength(1)
+  })
+
+  // Node rejects the header at the fetch layer and the failure came back wrapped as a
+  // ConnectionError — a misleading type for what is plainly caller input, and only after the
+  // request had been attempted. PHP's cURL silently truncated the same key instead, leaving caller
+  // and server disagreeing about what the key was, which deduplication cannot survive.
+  it.each([
+    ['the header-injection shape', 'order-42\r\nX-Injected: yes'],
+    ['a bare newline', 'order-42\n'],
+    ['a null byte', 'order-42\u0000'],
+    ['a tab', 'order\t42'],
+  ])('rejects an Idempotency-Key carrying control characters (%s)', async (_label, key) => {
+    const viaOption = stubFetch([{ status: 201, body: { id: 1 } }])
+    const viaHeader = stubFetch([{ status: 201, body: { id: 1 } }])
+
+    await expect(
+      transport(viaOption.fetch).request('POST', 'v1/sessions/1/messages', { body: { to: '1' }, idempotencyKey: key }),
+    ).rejects.toBeInstanceOf(InvalidIdempotencyKeyError)
+
+    await expect(
+      transport(viaHeader.fetch).request('POST', 'v1/sessions/1/messages', {
+        body: { to: '1' },
+        headers: { 'Idempotency-Key': key },
+      }),
+    ).rejects.toBeInstanceOf(WhatsDevError)
+
+    expect(viaOption.calls, 'The request went out before the key was checked.').toHaveLength(0)
+    expect(viaHeader.calls).toHaveLength(0)
+  })
+
+  it('still accepts an ordinary idempotency key', async () => {
+    const { fetch, calls } = stubFetch([{ status: 201, body: { id: 1 } }])
+
+    await transport(fetch).request('POST', 'v1/sessions/1/messages', { body: { to: '1' }, idempotencyKey: 'order-42_a.b~c' })
+
+    expect(calls[0]!.headers['Idempotency-Key']).toBe('order-42_a.b~c')
   })
 
   it('lets a caller-set header override both the transport default and the config header', async () => {

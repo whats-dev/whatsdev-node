@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ResolvedConfig } from '../config'
-import { ConnectionError, errorFromResponse, UnexpectedRedirectError } from '../errors'
+import { ConnectionError, errorFromResponse, InvalidIdempotencyKeyError, UnexpectedRedirectError } from '../errors'
 import { VERSION } from '../version'
 
 export interface RequestOptions {
@@ -26,6 +26,8 @@ const MAX_RETRY_AFTER_SECONDS = 60
 // Deliberately not Number(): that reads '0x1A' as 26 and ' ' as 0, where PHP's is_numeric() —
 // the sibling package's gate — reads neither as a number at all.
 const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
+// Mirrors the sibling package's /[\x00-\x1F\x7F]/: C0 controls plus DEL, tab included.
+const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/
 
 /**
  * The sleeper is not reachable from the public client, so a server's Retry-After would be honoured
@@ -40,6 +42,22 @@ function honouredRetryAfter(retryAfter: string | null): number | null {
   const seconds = Number(retryAfter)
 
   return Number.isFinite(seconds) && seconds >= 0 && seconds <= MAX_RETRY_AFTER_SECONDS ? seconds : null
+}
+
+/**
+ * fetch rejects a header value carrying a control character, and the failure came back wrapped as
+ * a ConnectionError — a misleading type for caller input, and only after the request was
+ * attempted. PHP's cURL silently truncated the same key instead, leaving caller and server holding
+ * different keys, which is precisely what deduplication cannot survive.
+ */
+function assertSendableIdempotencyKey(headers: Record<string, string>): void {
+  for (const [name, value] of Object.entries(headers)) {
+    if (name.toLowerCase() === 'idempotency-key' && CONTROL_CHARACTERS.test(String(value))) {
+      throw new InvalidIdempotencyKeyError(
+        'The Idempotency-Key contains a control character, so it cannot be sent unchanged. Use printable characters only.',
+      )
+    }
+  }
 }
 
 /**
@@ -180,7 +198,11 @@ export class Transport {
     }
 
     // Caller-set headers win: an explicit Idempotency-Key or a per-call override must survive.
-    return { ...headers, ...options.headers }
+    const merged = { ...headers, ...options.headers }
+
+    assertSendableIdempotencyKey(merged)
+
+    return merged
   }
 
   private buildUrl(path: string, query?: Record<string, unknown>): string {

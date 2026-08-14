@@ -17,6 +17,12 @@ export class InvalidSignatureError extends WhatsDevError {}
  */
 export class MissingWebhookSecretError extends WhatsDevError {}
 
+/**
+ * Caller input, not a transport failure: thrown before the request is sent, where a rejected
+ * header used to surface as a ConnectionError — a misleading type for a value the caller chose.
+ */
+export class InvalidIdempotencyKeyError extends WhatsDevError {}
+
 export class ApiError extends WhatsDevError {
   readonly code: string
   readonly status: number
