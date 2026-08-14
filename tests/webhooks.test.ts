@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { InvalidSignatureError } from '../src/errors'
+import { InvalidSignatureError, MissingWebhookSecretError, WhatsDevError } from '../src/errors'
 import { assertWebhookSignature, verifyWebhookSignature } from '../src/webhooks'
 
 const body = '{"event":"message","data":{"id":"abc"}}'
@@ -29,6 +29,20 @@ it('rejects a missing or malformed header instead of trusting it', () => {
 
 it('throws on assert so a handler cannot forget to check the return value', () => {
   expect(() => assertWebhookSignature(body, 'sha256=wrong', secret)).toThrow(InvalidSignatureError)
+})
+
+// An unset environment variable coerces to '', and HMAC with an empty key is a perfectly valid
+// digest an attacker can compute — so an empty secret turned the only security control this helper
+// provides into a silent no-op. It is a misconfiguration, not a failed verification: returning
+// false would send the developer hunting a forged-payload ghost instead of their own missing
+// environment variable.
+it('refuses to verify against an empty secret rather than accept the forgery it invites', () => {
+  const forged = `sha256=${createHmac('sha256', '').update(body).digest('hex')}`
+
+  expect(() => verifyWebhookSignature(body, forged, '')).toThrow(MissingWebhookSecretError)
+  expect(() => assertWebhookSignature(body, forged, '')).toThrow(MissingWebhookSecretError)
+  expect(() => verifyWebhookSignature(body, null, '')).toThrow(WhatsDevError)
+  expect(() => verifyWebhookSignature(body, forged, '')).toThrow(/webhook secret/)
 })
 
 it('rejects the correct digest under the wrong algorithm prefix', () => {

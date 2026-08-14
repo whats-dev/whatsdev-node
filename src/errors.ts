@@ -11,6 +11,12 @@ export class ConnectionError extends WhatsDevError {}
 
 export class InvalidSignatureError extends WhatsDevError {}
 
+/**
+ * Thrown instead of returning false, because an empty secret is the consumer's own
+ * misconfiguration — an unset environment variable — and not a payload that failed to verify.
+ */
+export class MissingWebhookSecretError extends WhatsDevError {}
+
 export class ApiError extends WhatsDevError {
   readonly code: string
   readonly status: number
