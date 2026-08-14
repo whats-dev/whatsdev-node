@@ -197,4 +197,47 @@ describe('Paginator additional coverage', () => {
     expect(items.map((item) => item.id)).toEqual([1, 2, 3])
     expect(calls).toHaveLength(3)
   })
+
+  it('follows a relative query-only links.next ("?cursor=...") so the traversal continues', async () => {
+    const { fetch, calls } = stubFetch([
+      { status: 200, body: { data: [{ id: 1 }], links: { next: '?cursor=p2&status=active' }, meta: { next_cursor: 'p2' } } },
+      { status: 200, body: { data: [{ id: 2 }], links: { next: null }, meta: {} } },
+    ])
+
+    const transport = makeTransport(fetch)
+    const items = await new Paginator(transport, 'GET', 'v1/contacts', { status: 'active' }).all()
+
+    expect(items).toHaveLength(2)
+    expect(calls).toHaveLength(2)
+    expect(new URL(calls[1]!.url).search).toBe('?cursor=p2&status=active')
+  })
+
+  it('follows a relative path+query links.next ("/v1/contacts?cursor=...") so the traversal continues', async () => {
+    const { fetch, calls } = stubFetch([
+      {
+        status: 200,
+        body: { data: [{ id: 1 }], links: { next: '/v1/contacts?cursor=p2&status=active' }, meta: { next_cursor: 'p2' } },
+      },
+      { status: 200, body: { data: [{ id: 2 }], links: { next: null }, meta: {} } },
+    ])
+
+    const transport = makeTransport(fetch)
+    const items = await new Paginator(transport, 'GET', 'v1/contacts', { status: 'active' }).all()
+
+    expect(items).toHaveLength(2)
+    expect(calls).toHaveLength(2)
+    expect(new URL(calls[1]!.url).search).toBe('?cursor=p2&status=active')
+  })
+
+  it('terminates on a next link that is malformed even resolved against the base url', async () => {
+    const { fetch, calls } = stubFetch([
+      { status: 200, body: { data: [{ id: 1 }], links: { next: 'http://[::1' }, meta: { next_cursor: 'p2' } } },
+    ])
+
+    const transport = makeTransport(fetch)
+    const items = await new Paginator(transport, 'GET', 'v1/contacts', { status: 'active' }).all()
+
+    expect(items).toHaveLength(1)
+    expect(calls).toHaveLength(1)
+  })
 })

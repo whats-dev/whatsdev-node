@@ -29,10 +29,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // Parses a links.next URL's query string rather than rebuilding one, because the server
 // encodes the caller's filters into that URL. A rebuild would silently drop them on page two.
-function queryFrom(url: string): Record<string, string> {
+// Resolved against baseUrl so a relative next link (the API emits absolute ones today, but
+// nothing guarantees that forever) still parses instead of being mistaken for the last page.
+function queryFrom(url: string, baseUrl: string): Record<string, string> {
   try {
     const query: Record<string, string> = {}
-    for (const [key, value] of new URL(url).searchParams.entries()) {
+    for (const [key, value] of new URL(url, baseUrl).searchParams.entries()) {
       query[key] = value
     }
     return query
@@ -64,7 +66,7 @@ export class Paginator<T> implements AsyncIterable<T> {
         return
       }
 
-      const nextQuery = queryFrom(next)
+      const nextQuery = queryFrom(next, this.transport.baseUrl)
 
       // An unparseable or query-less next link would otherwise strip the caller's filters on the next request.
       if (Object.keys(nextQuery).length === 0) {

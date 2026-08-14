@@ -30,6 +30,10 @@ export class Transport {
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   ) {}
 
+  get baseUrl(): string {
+    return this.config.baseUrl
+  }
+
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
     const upperMethod = method.toUpperCase()
     const headers = this.buildHeaders(upperMethod, options)
