@@ -318,3 +318,40 @@ describe('Transport additional coverage', () => {
     await expect(transport(aborting).request('GET', 'v1/me')).rejects.toBeInstanceOf(ConnectionError)
   })
 })
+
+/**
+ * AbortSignal.timeout(0) aborts on the next tick, so `timeout: 0` failed every request in about
+ * 30ms. The sibling package reads the same 0 as CURLOPT_TIMEOUT => 0, which is cURL's documented
+ * "no timeout". These prove the behaviour rather than inspecting the signal, through a fetch that
+ * honours abortion the way a real one does.
+ */
+describe('Transport timeouts', () => {
+  const abortAware = (async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+
+    if (init?.signal?.aborted) {
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+    }
+
+    return new Response(JSON.stringify({ ok: true }), { status: 200 })
+  }) as typeof fetch
+
+  it.each([
+    ['zero', 0],
+    ['negative', -1],
+  ])('disables the deadline entirely for a %s timeout', async (_label, timeout) => {
+    const response = await transport(abortAware, { timeout }).request<{ ok: boolean }>('GET', 'v1/me')
+
+    expect(response.body.ok).toBe(true)
+  })
+
+  it('still aborts a request that outruns a positive timeout', async () => {
+    await expect(transport(abortAware, { timeout: 1 }).request('GET', 'v1/me')).rejects.toBeInstanceOf(ConnectionError)
+  })
+
+  it('leaves a generous timeout alone', async () => {
+    const response = await transport(abortAware, { timeout: 30_000 }).request<{ ok: boolean }>('GET', 'v1/me')
+
+    expect(response.body.ok).toBe(true)
+  })
+})

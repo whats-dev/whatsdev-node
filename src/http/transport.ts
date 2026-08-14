@@ -203,7 +203,10 @@ export class Transport {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(this.#config.timeout),
+        // AbortSignal.timeout(0) aborts on the next tick rather than never, so a timeout of 0
+        // failed every request in about 30ms. The sibling package hands the same 0 to
+        // CURLOPT_TIMEOUT, where it is cURL's documented "no timeout": no signal is that.
+        signal: this.#config.timeout > 0 ? AbortSignal.timeout(this.#config.timeout) : undefined,
         // Left to itself, fetch follows a redirect and re-sends the whole POST body to the target.
         // Only three methods attach an Idempotency-Key, so every other write would be re-executed
         // with no dedup — the "sent twice" hazard, bypassed one layer below where the gate sits.
