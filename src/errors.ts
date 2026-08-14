@@ -49,7 +49,8 @@ export class NotFoundError extends ApiError {}
 export class QuotaExceededError extends ApiError {}
 export class RateLimitedError extends ApiError {}
 export class ScheduledMessageNotCancelableError extends ApiError {}
-export class ServerErrorError extends ApiError {}
+// Suffix dropped: the code already ends in "error", so no doubled "ErrorError" name.
+export class ServerError extends ApiError {}
 export class ServiceUnavailableError extends ApiError {}
 export class SessionLimitReachedError extends ApiError {}
 export class SessionNotConnectedError extends ApiError {}
@@ -59,7 +60,8 @@ export class TemplateLimitReachedError extends ApiError {}
 export class UnauthenticatedError extends ApiError {}
 export class UndefinedContactFieldError extends ApiError {}
 export class UnknownTemplateVariableError extends ApiError {}
-export class UpstreamErrorError extends ApiError {}
+// Suffix dropped: the code already ends in "error", so no doubled "ErrorError" name.
+export class UpstreamError extends ApiError {}
 
 // Detail-carrying subclasses: mirror the PHP twins' extra properties, camelCased.
 
@@ -134,7 +136,9 @@ type ApiErrorConstructor = new (
 ) => ApiError
 
 // One entry per API error code — must stay in sync with the sibling package's error map.
-const ERRORS: Record<string, ApiErrorConstructor> = {
+// Built on a null-prototype object so a code like 'toString' or 'constructor' can never
+// resolve an inherited Object.prototype member instead of falling through to ApiError.
+const ERRORS: Record<string, ApiErrorConstructor> = Object.assign(Object.create(null) as Record<string, ApiErrorConstructor>, {
   account_suspended: AccountSuspendedError,
   bad_request: BadRequestError,
   bulk_limit_exceeded: BulkLimitExceededError,
@@ -161,7 +165,7 @@ const ERRORS: Record<string, ApiErrorConstructor> = {
   quota_insufficient: QuotaInsufficientError,
   rate_limited: RateLimitedError,
   scheduled_message_not_cancelable: ScheduledMessageNotCancelableError,
-  server_error: ServerErrorError,
+  server_error: ServerError,
   service_unavailable: ServiceUnavailableError,
   session_limit_reached: SessionLimitReachedError,
   session_not_connected: SessionNotConnectedError,
@@ -172,9 +176,9 @@ const ERRORS: Record<string, ApiErrorConstructor> = {
   unauthenticated: UnauthenticatedError,
   undefined_contact_field: UndefinedContactFieldError,
   unknown_template_variable: UnknownTemplateVariableError,
-  upstream_error: UpstreamErrorError,
+  upstream_error: UpstreamError,
   validation_failed: ValidationFailedError,
-}
+})
 
 export function errorFromResponse(status: number, body: unknown, requestId?: string): ApiError {
   const envelope = (body as { error?: Record<string, unknown> } | null)?.error

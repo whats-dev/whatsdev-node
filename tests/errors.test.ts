@@ -59,4 +59,15 @@ describe('errorFromResponse', () => {
     expect(error).toBeInstanceOf(ApiError)
     expect(error).toBeInstanceOf(Error)
   })
+
+  it.each(['toString', 'hasOwnProperty', 'constructor'])(
+    'does not resolve inherited Object.prototype members for code %s',
+    (code) => {
+      const error = errorFromResponse(400, { error: { code, message: 'x' } })
+
+      expect(error.constructor).toBe(ApiError)
+      expect(error.code).toBe(code)
+      expect(error).toBeInstanceOf(ApiError)
+    },
+  )
 })
