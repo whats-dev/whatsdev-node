@@ -57,4 +57,17 @@ describe('build output', () => {
       expect(entry.startsWith('./dist/')).toBe(true)
     }
   })
+
+  // A single top-level "types" in the exports map answers require too, and the package is
+  // type:module — so a TypeScript CJS consumer under moduleResolution node16 read the ESM
+  // declarations and failed with TS1479, while the .d.cts that answers it was built all along.
+  it('points each module system at its own declarations', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      exports: Record<string, Record<string, Record<string, string>>>
+    }
+
+    expect(manifest.exports['.']!.require!.types).toBe('./dist/index.d.cts')
+    expect(manifest.exports['.']!.import!.types).toBe('./dist/index.d.ts')
+    expect(existsSync(new URL('../dist/index.d.cts', import.meta.url))).toBe(true)
+  })
 })

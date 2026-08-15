@@ -1,7 +1,10 @@
 {
   "name": "@whatsdev/sdk",
   "version": "0.1.0",
-  "description": "Official Node client for the WhatsDev API",
+  "description": "Official Node.js client for the WhatsDev WhatsApp API: sessions, messaging, contacts, bulk sends, templates and signed webhooks",
+  "keywords": ["whatsapp", "whatsdev", "messaging", "api-client", "sdk", "webhooks", "typescript"],
+  "homepage": "https://whats.youdev.online/docs",
+  "author": "WhatsDev",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -9,13 +12,19 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": ["dist", "README.md", "LICENSE"],
   "engines": { "node": ">=18" },
+  "publishConfig": { "access": "public" },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
