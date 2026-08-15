@@ -123,7 +123,7 @@ async function handleWebhook(request: Request, webhookSecret: string) {
 const groups = await client.request('GET', 'v1/sessions/7/groups', { query: { limit: 10 } })
 ```
 
-الوسيط الثالث كائن خيارات حقوله `query` و`body` و`headers` و`idempotencyKey`، وتتحقق TypeScript من أسمائها وقت البناء فلا يمر حقل مكتوب خطأً إلى وقت التشغيل. ومعظم ما يصل إليه هذا المخرج عمليات كتابة، وهي تحتاج إلى جسم (body):
+الوسيط الثالث كائن خيارات حقوله `query` و`body` و`headers` و`idempotencyKey`. تُنبّهك TypeScript إلى اسم مكتوب خطأً داخل كائن حرفي (object literal) — فكتابة `bodyy` هناك خطأ وقت البناء — لكن هذا الفحص أضيق مما يبدو: فهو لا يعمل حين تُمرَّر الخيارات عبر متغيّر يحمل حقلاً صحيحًا إلى جانب الحقل الخاطئ، ولا وجود له أصلاً عند استخدام الحزمة من JavaScript عادي، وهو مدعوم في نسختَي ESM و CJS معًا. وفي هاتين الحالتين يُهمَل الحقل غير المعروف بصمت، فتحقّق من الأسماء بنفسك. ومعظم ما يصل إليه هذا المخرج عمليات كتابة، وهي تحتاج إلى جسم (body):
 
 ```ts
 const group = await client.request('POST', 'v1/sessions/7/groups', {
@@ -263,7 +263,7 @@ Any endpoint the package doesn't have a dedicated method for is still one call a
 const groups = await client.request('GET', 'v1/sessions/7/groups', { query: { limit: 10 } })
 ```
 
-The third argument is an options object with `query`, `body`, `headers` and `idempotencyKey`, whose names TypeScript checks at compile time so a mistyped one never reaches runtime. Most of what the escape hatch reaches are writes, and a write takes a body:
+The third argument is an options object with `query`, `body`, `headers` and `idempotencyKey`. TypeScript flags a mistyped name in an object literal — writing `bodyy` there is a compile error — but that check is narrower than it looks: it doesn't fire for an options object held in a variable alongside a valid key, and it isn't there at all when you call the package from plain JavaScript, which both the ESM and CJS builds support. In those cases an unrecognised key is dropped in silence, so check the names yourself. Most of what the escape hatch reaches are writes, and a write takes a body:
 
 ```ts
 const group = await client.request('POST', 'v1/sessions/7/groups', {
