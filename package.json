@@ -4,6 +4,8 @@
   "description": "Official Node.js client for the WhatsDev WhatsApp API: sessions, messaging, contacts, bulk sends, templates and signed webhooks",
   "keywords": ["whatsapp", "whatsdev", "messaging", "api-client", "sdk", "webhooks", "typescript"],
   "homepage": "https://whats.youdev.online/docs",
+  "repository": { "type": "git", "url": "git+https://github.com/whats-dev/whatsdev-node.git" },
+  "bugs": { "url": "https://github.com/whats-dev/whatsdev-node/issues" },
   "author": "WhatsDev",
   "license": "MIT",
   "type": "module",
