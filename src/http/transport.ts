@@ -15,8 +15,7 @@ export interface ApiResponse<T = unknown> {
   status: number
   headers: Headers
   body: T
-  // The undecoded payload. GET /v1/media/{message} streams a stored file, so for that one endpoint
-  // the bytes are the answer and the JSON decode above them has nothing to work with.
+  // GET /v1/media/{message} streams a stored file, so for that one endpoint the bytes are the answer.
   bytes: Uint8Array
 }
 
@@ -24,11 +23,7 @@ export function uuidv4(): string {
   return randomUUID()
 }
 
-/**
- * A 204 and a non-JSON payload both decode to undefined, while every resource method declares an
- * object return — so handing undefined back makes that declaration a lie TypeScript cannot warn
- * about, and Object.keys() on it throws. {} is the mirror of the sibling package's [].
- */
+/** Every resource method declares an object return, so undefined would be a lie TypeScript cannot warn about. */
 export function emptyWhenAbsent<T>(body: T | null | undefined): T {
   return body ?? ({} as T)
 }
@@ -36,14 +31,12 @@ export function emptyWhenAbsent<T>(body: T | null | undefined): T {
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const RETRY_STATUSES = new Set([429, 502, 503, 504])
 const MAX_RETRY_AFTER_SECONDS = 60
-// Mirrors the sibling package's /[^\x20-\x7E]/: anything outside printable ASCII. undici rejects
-// a value above U+00FF with a ByteString TypeError, and cURL truncates one at a control character.
+// undici rejects a value above U+00FF outright, and cURL truncates one at a control character.
 const UNSENDABLE = /[^\u0020-\u007E]/
 
 /**
- * The sleeper is not reachable from the public client, so a server's Retry-After would be honoured
- * with no consumer override: 86400 freezes the caller for a day per retry, and a negative value
- * made setTimeout fire immediately rather than wait. Outside the ceiling means the backoff ladder.
+ * A server's Retry-After is honoured with no consumer override, so 86400 froze the caller for a day
+ * per retry and a negative value made setTimeout fire immediately rather than wait.
  */
 function honouredRetryAfter(retryAfter: string | null): number | null {
   if (retryAfter === null || !isNumeric(retryAfter)) {
@@ -56,12 +49,9 @@ function honouredRetryAfter(retryAfter: string | null): number | null {
 }
 
 /**
- * fetch rejects such a header value with a TypeError, which the catch around fetch wrapped as a
- * ConnectionError — a misleading type for caller input, raised only after the request was
- * attempted and then retried with backoff as though the network were at fault. PHP's cURL
- * silently truncates the same value instead, so the server reads a header nobody wrote.
- *
- * The message names the header, never its value: Authorization is a header too.
+ * fetch rejects such a value with a TypeError that used to surface as a retryable ConnectionError,
+ * where cURL truncates it instead. The message names the header, never its value: Authorization is
+ * a header too.
  */
 function assertSendableHeaders(headers: Record<string, string>): void {
   for (const [name, value] of Object.entries(headers)) {
@@ -82,11 +72,8 @@ function assertSendableHeaders(headers: Record<string, string>): void {
 }
 
 /**
- * Mirrors PHP's http_build_query(), which is the form the Laravel server on the other end parses
- * natively: an array as indexed brackets, a boolean as 1 or 0, a null dropped without renumbering
- * what surrounds it. URLSearchParams with String(value) turned ['a','b'] into the scalar 'a,b',
- * which that parser silently drops, and true into the string 'true', which it does not read as
- * a boolean. No tier-1 endpoint takes an array filter today; the escape hatch reaches ones that do.
+ * Mirrors PHP's http_build_query(), the form the Laravel server parses natively: URLSearchParams
+ * turned ['a','b'] into 'a,b', which that parser silently drops, and true into the string 'true'.
  */
 function buildQuery(query: Record<string, unknown>): string {
   const pairs: string[] = []
@@ -120,18 +107,14 @@ function appendQuery(pairs: string[], value: unknown, key: string): void {
   pairs.push(`${urlencode(key)}=${urlencode(typeof value === 'boolean' ? (value ? '1' : '0') : String(value))}`)
 }
 
-// Mirrors PHP's urlencode(), not encodeURIComponent(): the latter leaves !'()*~ unescaped and
-// writes a space as %20 where PHP writes +.
+// Mirrors PHP's urlencode(): encodeURIComponent leaves !'()*~ unescaped and writes a space as %20.
 function urlencode(value: string): string {
   return encodeURIComponent(value)
     .replace(/[!'()*~]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)
     .replace(/%20/g, '+')
 }
 
-/**
- * The API never legitimately redirects, so a 3xx is an error like any other: catchable as an
- * ApiError, naming the status and the Location it pointed at.
- */
+/** The API never legitimately redirects, so a 3xx is an ApiError like any other. */
 function redirected(response: Response): UnexpectedRedirectError {
   const location = response.headers.get('Location')
 
@@ -146,8 +129,7 @@ function redirected(response: Response): UnexpectedRedirectError {
 }
 
 export class Transport {
-  // Every resource holds a transport, so a TypeScript-private (but runtime-enumerable) config
-  // would put the API key in JSON.stringify(client) once per resource. #config is private for real.
+  // TypeScript's `private` is erased, so each of the 13 resources would carry the key into JSON.stringify.
   readonly #config: ResolvedConfig
 
   constructor(
@@ -212,27 +194,21 @@ export class Transport {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        // AbortSignal.timeout(0) aborts on the next tick rather than never, so a timeout of 0
-        // failed every request in about 30ms. The sibling package hands the same 0 to
-        // CURLOPT_TIMEOUT, where it is cURL's documented "no timeout": no signal is that.
+        // AbortSignal.timeout(0) aborts on the next tick, where cURL reads the same 0 as no timeout.
         signal: this.#config.timeout > 0 ? AbortSignal.timeout(this.#config.timeout) : undefined,
-        // Left to itself, fetch follows a redirect and re-sends the whole POST body to the target.
-        // Only three methods attach an Idempotency-Key, so every other write would be re-executed
-        // with no dedup — the "sent twice" hazard, bypassed one layer below where the gate sits.
+        // Left to itself, fetch re-sends the whole POST body to the target, below the dedup gate.
         redirect: 'manual',
       })
     } catch (err) {
       throw new ConnectionError(err instanceof Error ? err.message : 'The request could not be completed.')
     }
 
-    // status 0 with type 'opaqueredirect' is what a browser or edge runtime returns under
-    // redirect: 'manual'; Node hands back the real 3xx. Both mean the same thing here.
+    // A browser or edge runtime returns status 0 / 'opaqueredirect' where Node hands back the real 3xx.
     if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
       throw redirected(response)
     }
 
-    // Read as bytes, not text: response.text() decodes UTF-8 and replaces every invalid sequence,
-    // which is lossy for the one endpoint that streams a file rather than answering JSON.
+    // response.text() replaces every invalid UTF-8 sequence, which is lossy for the one file endpoint.
     let bytes: Uint8Array
 
     try {
@@ -241,9 +217,7 @@ export class Transport {
       throw new ConnectionError(err instanceof Error ? err.message : 'The response body could not be read.')
     }
 
-    // A non-JSON body (e.g. an empty 204) decodes to undefined rather than throwing. So does a
-    // JSON scalar: `0` and `"text"` are valid JSON but not the object every return type promises,
-    // and the sibling package's decode() nulls exactly the same shapes.
+    // `0` and `"text"` are valid JSON but not the object every return type promises, so both null out.
     let body_: unknown
     try {
       const parsed: unknown = bytes.byteLength === 0 ? undefined : JSON.parse(new TextDecoder().decode(bytes))

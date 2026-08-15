@@ -7,18 +7,14 @@ import { resultFromResponse } from '../result'
 import type { Result } from '../result'
 
 /**
- * Every caller-supplied path segment goes through this. Unencoded, a forwarded route parameter
- * retargets the request: `messageOps.delete('../../v1/sessions/9')` would otherwise reach the
- * server as DELETE /v1/sessions/9, authenticated with the account's own key.
- *
- * Mirrors PHP's rawurlencode(): encodeURIComponent leaves !'()* unescaped, rawurlencode does not.
+ * Unencoded, a forwarded route parameter retargets the request: messageOps.delete('../../v1/sessions/9')
+ * would reach the server as DELETE /v1/sessions/9. Mirrors rawurlencode(), which escapes !'()* too.
  */
 export function rawUrlEncode(value: string | number): string {
   return encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
 }
 
-// Prefixed http* (not get/post/delete): several resources define public get(id) and delete(id)
-// methods, and TypeScript rejects an incompatible override of a same-named base member.
+// Prefixed http*: several resources define get(id)/delete(id), which TypeScript cannot override incompatibly.
 export abstract class Resource {
   constructor(protected readonly transport: Transport) {}
 
@@ -76,9 +72,8 @@ export abstract class Resource {
     return new Paginator<T>(this.transport, 'GET', path, query)
   }
 
-  // The server deduplicates on this key, so a retried write can never send twice. Generated per
-  // call unless the caller supplies one — a caller resuming its own workflow wants to reuse the
-  // original key, which is exactly when replay is the point.
+  // The server deduplicates on this key, so a retried write never sends twice; a caller resuming
+  // its own workflow passes the original back.
   protected withIdempotency(key?: string): Record<string, string> {
     return { 'Idempotency-Key': key ?? uuidv4() }
   }

@@ -15,9 +15,7 @@ interface Manifest {
   endpoints: Endpoint[]
 }
 
-// sdks/endpoints.json is the contract the main application's SdkEndpointCoverageTest holds the API
-// to. These tests hold it to the SDK from this side: it must describe exactly the requests this
-// package issues — no more, no less.
+// The manifest must describe exactly the requests this package issues — no more, no less.
 // Package root first: `git subtree split --prefix=sdks/node` publishes without the repository copy.
 function loadManifest(): Manifest | null {
   for (const candidate of ['../endpoints.json', '../../endpoints.json']) {
@@ -65,9 +63,8 @@ const KNOWN_RESOURCES = [
   'suppressions',
 ] as const
 
-// TypeScript types are erased at runtime, so arguments cannot be synthesized by reflection the way
-// the PHP suite does. One explicit row per method is reviewable and deterministic; the coverage
-// test below fails loudly when a method has no row, which is what keeps this table from drifting.
+// Types are erased at runtime, so arguments cannot be reflected as the PHP suite does; the test
+// below fails loudly when a method has no row, which is what keeps this table from drifting.
 const INVOCATIONS: Array<[ResourceName, string, unknown[]]> = [
   ['account', 'me', []],
   ['account', 'usage', []],
@@ -194,8 +191,7 @@ function matches(endpoint: Endpoint, method: string, path: string): boolean {
   return new RegExp(`^${pattern}$`).test(path)
 }
 
-// A literal entry wins outright, so a future sibling of a placeholder route — say
-// POST v1/contacts/{contact} beside POST v1/contacts/batch — cannot read as ambiguous.
+// A literal entry wins, so POST v1/contacts/batch cannot read as ambiguous beside {contact}.
 function resolve(method: string, path: string): Endpoint[] {
   const literal = endpoints.filter((endpoint) => endpoint.method === method && endpoint.path === path)
 

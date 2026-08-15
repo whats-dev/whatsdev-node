@@ -1,18 +1,10 @@
 /**
- * Defensive typing for the `details` map, shared by every error that exposes one, plus the
- * numeric gate the transport and the quota headers read through.
- *
- * The server sends well-typed details today; a newer or hostile one may not, and a typed
- * property must never carry a value its own declaration forbids. A value that cannot be coerced
- * is dropped from the typed view and stays readable on .details, which is the raw map.
- *
- * Coercion is deliberately narrow rather than permissive: String(5) and (string) 5 agree, but
- * String(true) is "true" where PHP's (string) true is "1", so allowing scalars through would put
- * the two packages back out of step on exactly the values this guards against.
+ * Defensive typing for the `details` map: a value that cannot be coerced is dropped from the typed
+ * view and stays readable on .details. Coercion stays narrow because String(true) is "true" where
+ * PHP's (string) true is "1", and allowing scalars would put the two packages back out of step.
  */
 
-// Deliberately not Number(): that reads '0x1A' as 26 and ' ' as 0, where PHP's is_numeric() —
-// the sibling package's gate — reads neither as a number at all.
+// Not Number(): that reads '0x1A' as 26 and ' ' as 0, where PHP's is_numeric() reads neither.
 const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/
 
 export function isNumeric(value: unknown): boolean {
@@ -54,8 +46,7 @@ export function detailList(details: Record<string, unknown>, key: string): unkno
 }
 
 /**
- * The list behind a property declared as strings: a non-string member is dropped rather than
- * stringified, so join() on the typed view can never meet something it cannot join.
+ * A non-string member is dropped rather than stringified, so join() never meets what it cannot join.
  */
 export function detailStringList(details: Record<string, unknown>, key: string): string[] {
   return detailList(details, key).filter((item): item is string => typeof item === 'string')

@@ -39,9 +39,7 @@ describe('build output', () => {
     expect(dts).toContain('verifyWebhookSignature')
   })
 
-  // files: ["dist"] with main/module/types pointing into dist/, and dist/ is gitignored and
-  // untracked: npm publish without a manual build first ships a package whose every entry point
-  // 404s, and nothing otherwise binds the published bytes to the reviewed src/.
+  // dist/ is gitignored, so npm publish without a build first ships a package whose entry points 404.
   it('binds the published artifact to the reviewed source with prepublishOnly', () => {
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
       main: string
@@ -58,9 +56,8 @@ describe('build output', () => {
     }
   })
 
-  // A single top-level "types" in the exports map answers require too, and the package is
-  // type:module — so a TypeScript CJS consumer under moduleResolution node16 read the ESM
-  // declarations and failed with TS1479, while the .d.cts that answers it was built all along.
+  // A single top-level "types" answers require too, so a CJS consumer under moduleResolution
+  // node16 read the ESM declarations and failed with TS1479 against a .d.cts that was always built.
   it('points each module system at its own declarations', () => {
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
       exports: Record<string, Record<string, Record<string, string>>>

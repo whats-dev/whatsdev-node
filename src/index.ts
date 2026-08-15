@@ -1,7 +1,6 @@
 export { WhatsDevClient } from './client'
 export { DEFAULT_BASE_URL, resolveConfig, type ClientOptions, type ResolvedConfig } from './config'
-// Every typed error class plus errorFromResponse: without this, a consumer could never
-// import ApiError or a code-specific subclass to catch it by type.
+// Without this a consumer could never import ApiError or a subclass to catch by type.
 export * from './errors'
 export { type ApiResponse, type RequestOptions, Transport } from './http/transport'
 export { type MediaFile, mediaFileFromResponse } from './media'

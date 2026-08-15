@@ -15,8 +15,7 @@ export function pageFromResponse<T>(response: ApiResponse<unknown>): Page<T> {
   const cursor = meta.next_cursor
 
   return {
-    // A data envelope that arrives as a JSON object yields its values, the way the sibling
-    // package's array_values() does — reading it as an empty page would lose the whole page.
+    // An object-shaped data envelope yields its values; reading it as empty would lose the page.
     data: itemsOf(body.data),
     meta,
     links,
@@ -37,10 +36,8 @@ function itemsOf<T>(data: unknown): T[] {
   return isRecord(data) ? (Object.values(data) as T[]) : []
 }
 
-// Parses a links.next URL's query string rather than rebuilding one, because the server
-// encodes the caller's filters into that URL. A rebuild would silently drop them on page two.
-// Resolved against baseUrl so a relative next link (the API emits absolute ones today, but
-// nothing guarantees that forever) still parses instead of being mistaken for the last page.
+// The server encodes the caller's filters into links.next, so a rebuilt URL would drop them on
+// page two; resolved against baseUrl so a relative link still parses rather than ending the walk.
 function queryFrom(url: string, baseUrl: string): Record<string, unknown> {
   try {
     const query: Record<string, unknown> = {}
@@ -54,9 +51,8 @@ function queryFrom(url: string, baseUrl: string): Record<string, unknown> {
 }
 
 /**
- * Mirrors PHP's parse_str(), which is how the sibling package reads the same URL: tag[]=x&tag[]=y
- * is two values, not one. searchParams.entries() hands back the literal key twice, so writing it
- * straight into an object kept only the last value and page two asked for half the filter.
+ * Mirrors PHP's parse_str(): searchParams.entries() hands back tag[] twice, and writing that
+ * straight into an object kept only the last value, so page two asked for half the filter.
  */
 function segmentsOf(key: string): string[] {
   const start = key.indexOf('[')
@@ -91,8 +87,7 @@ function assign(target: Record<string, unknown>, segments: string[], value: stri
   container[nextKey(container, segments[segments.length - 1]!)] = value
 }
 
-// An empty segment is the append form, and its index is the count already in the container —
-// which serialises back out as tag[0], tag[1], exactly what http_build_query() would emit.
+// An empty segment appends at the container's current count, which reserialises as tag[0], tag[1].
 function nextKey(container: Record<string, unknown>, segment: string): string {
   return segment === '' ? String(Object.keys(container).length) : segment
 }

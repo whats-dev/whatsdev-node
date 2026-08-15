@@ -22,8 +22,7 @@ export function resultFromResponse<T>(response: ApiResponse<T>): Result<T> {
   }
 }
 
-// A remaining-count is a whole number. Number() alone read '12.7' as 12.7 and '0x10' as 16,
-// where the sibling package's is_numeric() gate plus (int) cast reads 12 and nothing at all.
+// Number() alone read '12.7' as 12.7 and '0x10' as 16, where is_numeric() + (int) reads 12 and nothing.
 function quota(header: string | null): number | null {
   return header !== null && isNumeric(header) ? toInteger(header) : null
 }

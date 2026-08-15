@@ -4,8 +4,7 @@ import { WhatsDevClient } from '../src/client'
 import { VERSION } from '../src/version'
 import { stubFetch } from './support/stubFetch'
 
-// The number is hand-maintained here, in package.json and in the sibling package's Version::VALUE,
-// and nothing but the User-Agent shows when they drift.
+// Hand-maintained here, in package.json and in the sibling's Version::VALUE; only the User-Agent shows a drift.
 it('declares the version npm publishes', () => {
   const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
 

@@ -13,23 +13,13 @@ export class ConnectionError extends WhatsDevError {}
 
 export class InvalidSignatureError extends WhatsDevError {}
 
-/**
- * Thrown instead of returning false, because an empty secret is the consumer's own
- * misconfiguration — an unset environment variable — and not a payload that failed to verify.
- */
+/** Thrown rather than returning false: an empty secret is the consumer's own misconfiguration, not a failed payload. */
 export class MissingWebhookSecretError extends WhatsDevError {}
 
-/**
- * Caller input, not a transport failure: thrown before the request is sent, where a rejected
- * header used to surface as a ConnectionError — a misleading type for a value the caller chose,
- * and one the transport then retried with backoff as though the network were at fault.
- */
+/** Caller input, not a transport failure: a rejected header used to surface as a retryable ConnectionError. */
 export class InvalidHeaderError extends WhatsDevError {}
 
-/**
- * The one header whose corruption defeats a mechanism rather than merely a request, so it keeps
- * its own type and message under the general one.
- */
+/** The one header whose corruption defeats a mechanism rather than merely a request. */
 export class InvalidIdempotencyKeyError extends InvalidHeaderError {}
 
 export class ApiError extends WhatsDevError {
@@ -47,13 +37,9 @@ export class ApiError extends WhatsDevError {
   }
 }
 
-/**
- * Not in the ERRORS map below: the API never legitimately redirects, so a 3xx is something in
- * front of it — a proxy, a stale base URL — and never an error code the server chose to return.
- */
+/** Not in the ERRORS map: a 3xx is something in front of the API, never a code the server chose to return. */
 export class UnexpectedRedirectError extends ApiError {}
 
-// Plain subclasses: no properties beyond ApiError's.
 export class AccountSuspendedError extends ApiError {}
 export class BadRequestError extends ApiError {}
 export class BulkLimitExceededError extends ApiError {}
@@ -76,7 +62,7 @@ export class NotFoundError extends ApiError {}
 export class QuotaExceededError extends ApiError {}
 export class RateLimitedError extends ApiError {}
 export class ScheduledMessageNotCancelableError extends ApiError {}
-// Suffix dropped: the code already ends in "error", so no doubled "ErrorError" name.
+// No suffix: the code already ends in "error".
 export class ServerError extends ApiError {}
 export class ServiceUnavailableError extends ApiError {}
 export class SessionLimitReachedError extends ApiError {}
@@ -87,7 +73,7 @@ export class TemplateLimitReachedError extends ApiError {}
 export class UnauthenticatedError extends ApiError {}
 export class UndefinedContactFieldError extends ApiError {}
 export class UnknownTemplateVariableError extends ApiError {}
-// Suffix dropped: the code already ends in "error", so no doubled "ErrorError" name.
+// No suffix: the code already ends in "error".
 export class UpstreamError extends ApiError {}
 
 // Detail-carrying subclasses: mirror the PHP twins' extra properties, camelCased.
@@ -162,9 +148,8 @@ type ApiErrorConstructor = new (
   requestId?: string,
 ) => ApiError
 
-// One entry per API error code — must stay in sync with the sibling package's error map.
-// Built on a null-prototype object so a code like 'toString' or 'constructor' can never
-// resolve an inherited Object.prototype member instead of falling through to ApiError.
+// One entry per API error code, in step with the sibling package's map. Null-prototype so a code
+// like 'toString' cannot resolve an inherited member instead of falling through to ApiError.
 const ERRORS: Record<string, ApiErrorConstructor> = Object.assign(Object.create(null) as Record<string, ApiErrorConstructor>, {
   account_suspended: AccountSuspendedError,
   bad_request: BadRequestError,
@@ -211,10 +196,8 @@ export function errorFromResponse(status: number, body: unknown, requestId?: str
   const envelope = (body as { error?: Record<string, unknown> } | null)?.error
   const code = typeof envelope?.code === 'string' ? envelope.code : 'http_error'
   const message = typeof envelope?.message === 'string' ? envelope.message : `The API returned HTTP ${status}.`
-  // is_array() is the sibling package's gate, and a JSON list decodes to an array there — so a
-  // list passes here too, while a string, a number and a bool are dropped for an empty map. Left
-  // unguarded, `details: "oops"` made e.errors a string typed Record<string, string[]>, and
-  // Object.entries() on it yielded character-index pairs instead of field names.
+  // Unguarded, `details: "oops"` typed e.errors as a Record it was not, and Object.entries() on it
+  // yielded character-index pairs. A list passes, matching the sibling package's is_array() gate.
   const details = isDetailMap(envelope?.details) ? envelope.details : {}
 
   const Constructor = ERRORS[code] ?? ApiError

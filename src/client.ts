@@ -15,8 +15,7 @@ import { Templates } from './resources/templates'
 import { Webhooks } from './resources/webhooks'
 
 export class WhatsDevClient {
-  // Held privately and read through a prototype getter: an own property lands in
-  // JSON.stringify(client) and console.log(client), and the config carries a live API key.
+  // An own property lands in JSON.stringify(client), and the config carries a live API key.
   readonly #config: ResolvedConfig
 
   readonly account: Account
@@ -58,10 +57,7 @@ export class WhatsDevClient {
     this.sandbox = new Sandbox(this.transport)
   }
 
-  /**
-   * The escape hatch. Every endpoint this package has no method for is one call away, so
-   * nothing in the API is ever unreachable from the SDK.
-   */
+  /** The escape hatch for any endpoint with no method of its own; a write here retries only with an idempotencyKey. */
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
     const response = await this.transport.request<T>(method, path, options)
 
