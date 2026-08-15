@@ -77,11 +77,21 @@ it('verifies a body containing a literal null byte', () => {
   expect(verifyWebhookSignature(bodyWithNull, signature, secret)).toBe(true)
 })
 
-describe('verifyWebhookSignature with a Buffer body', () => {
+describe('verifyWebhookSignature with a byte-array body', () => {
   it('accepts a signature computed over the same bytes', () => {
     const bufferBody = Buffer.from(body, 'utf8')
     const signature = `sha256=${createHmac('sha256', secret).update(bufferBody).digest('hex')}`
 
     expect(verifyWebhookSignature(bufferBody, signature, secret)).toBe(true)
+  })
+
+  // The declared type is Uint8Array, so a plain one — what a Web-standard framework hands you —
+  // has to verify without being wrapped in a Buffer first.
+  it('accepts a plain Uint8Array that is not a Buffer', () => {
+    const bytes = new Uint8Array(new TextEncoder().encode(body))
+    const signature = `sha256=${createHmac('sha256', secret).update(bytes).digest('hex')}`
+
+    expect(Buffer.isBuffer(bytes)).toBe(false)
+    expect(verifyWebhookSignature(bytes, signature, secret)).toBe(true)
   })
 })

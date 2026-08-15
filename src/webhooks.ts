@@ -5,10 +5,13 @@ import { InvalidSignatureError, MissingWebhookSecretError } from './errors'
  * rawBody must be the exact bytes received: the signature is over bytes, and re-encoding a decoded
  * payload changes key order and whitespace.
  *
+ * Typed Uint8Array, not Buffer: a Buffer is one, and naming Buffer would put @types/node in the
+ * published declarations that both READMEs promise a consumer does not need.
+ *
  * @throws MissingWebhookSecretError when the secret is empty.
  */
 export function verifyWebhookSignature(
-  rawBody: string | Buffer,
+  rawBody: string | Uint8Array,
   signatureHeader: string | null | undefined,
   secret: string,
 ): boolean {
@@ -32,7 +35,7 @@ export function verifyWebhookSignature(
 
 /** @throws MissingWebhookSecretError when the secret is empty. */
 export function assertWebhookSignature(
-  rawBody: string | Buffer,
+  rawBody: string | Uint8Array,
   signatureHeader: string | null | undefined,
   secret: string,
 ): void {

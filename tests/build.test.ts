@@ -39,6 +39,17 @@ describe('build output', () => {
     expect(dts).toContain('verifyWebhookSignature')
   })
 
+  // Both READMEs promise no @types package is needed, so a Node global here fails tsc inside
+  // node_modules for a consumer who has none — with skipLibCheck off, which is the default.
+  it('keeps node globals off the published type surface', () => {
+    for (const file of ['dist/index.d.ts', 'dist/index.d.cts']) {
+      // Only tsup's copied JSDoc is stripped; a declaration naming the type would still be scanned.
+      const dts = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+
+      expect(dts, `${file} names a type only @types/node declares.`).not.toMatch(/\b(Buffer|NodeJS|__dirname|process)\b/)
+    }
+  })
+
   // dist/ is gitignored, so npm publish without a build first ships a package whose entry points 404.
   it('binds the published artifact to the reviewed source with prepublishOnly', () => {
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
