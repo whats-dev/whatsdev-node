@@ -241,10 +241,13 @@ export class Transport {
       throw new ConnectionError(err instanceof Error ? err.message : 'The response body could not be read.')
     }
 
-    // A non-JSON body (e.g. an empty 204) decodes to undefined rather than throwing.
+    // A non-JSON body (e.g. an empty 204) decodes to undefined rather than throwing. So does a
+    // JSON scalar: `0` and `"text"` are valid JSON but not the object every return type promises,
+    // and the sibling package's decode() nulls exactly the same shapes.
     let body_: unknown
     try {
-      body_ = bytes.byteLength === 0 ? undefined : JSON.parse(new TextDecoder().decode(bytes))
+      const parsed: unknown = bytes.byteLength === 0 ? undefined : JSON.parse(new TextDecoder().decode(bytes))
+      body_ = typeof parsed === 'object' && parsed !== null ? parsed : undefined
     } catch {
       body_ = undefined
     }

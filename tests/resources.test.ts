@@ -940,6 +940,21 @@ describe('no content', () => {
     expect(await client.account.me()).toEqual({})
   })
 
+  // Valid JSON, but not the object the return type promises. The sibling package's decode() nulls
+  // it, so the resource method still hands back a map rather than a scalar the caller cannot index.
+  it.each([
+    ['a number', '0'],
+    ['a bool', 'true'],
+    ['a string', '"text"'],
+    ['null', 'null'],
+  ])('returns an empty object from a body that is a json scalar (%s)', async (_name, raw) => {
+    const fetchImpl = (async () =>
+      new Response(raw, { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch
+    const client = new WhatsDevClient({ apiKey: 'k', fetch: fetchImpl })
+
+    expect(await client.account.me()).toEqual({})
+  })
+
   it('carries an empty object as a Result data on a 204', async () => {
     const { client } = setup({ status: 204, headers: { 'X-Request-Id': 'req-9' } })
 
