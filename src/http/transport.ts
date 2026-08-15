@@ -23,7 +23,10 @@ export function uuidv4(): string {
   return randomUUID()
 }
 
-/** Every resource method declares an object return, so undefined would be a lie TypeScript cannot warn about. */
+/**
+ * Every resource method declares an object return, so undefined would be a lie TypeScript cannot warn about.
+ * `{}` is the mirror of the sibling package's `[]`.
+ */
 export function emptyWhenAbsent<T>(body: T | null | undefined): T {
   return body ?? ({} as T)
 }
@@ -31,7 +34,8 @@ export function emptyWhenAbsent<T>(body: T | null | undefined): T {
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 const RETRY_STATUSES = new Set([429, 502, 503, 504])
 const MAX_RETRY_AFTER_SECONDS = 60
-// undici rejects a value above U+00FF outright, and cURL truncates one at a control character.
+// Mirrors the sibling package's /[^\x20-\x7E]/: undici rejects a value above U+00FF outright,
+// and cURL truncates one at a control character.
 const UNSENDABLE = /[^\u0020-\u007E]/
 
 /**
