@@ -120,7 +120,7 @@ function redirected(response: Response): UnexpectedRedirectError {
 
   return new UnexpectedRedirectError(
     `The API answered HTTP ${response.status} redirecting to ${location ?? 'an unnamed location'}. `
-      + 'This client does not follow redirects; check the base URL and anything proxying it.',
+      + 'The API never legitimately redirects; check the base URL and anything proxying it.',
     'unexpected_redirect',
     response.status,
     { location },
