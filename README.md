@@ -45,7 +45,7 @@ console.log((result.data as { data: { id: number } }).data.id)
 
 ### معالجة الأخطاء
 
-كل خطأ (error) ترميه الحزمة يرث من `WhatsDevError`. أخطاء الواجهة البرمجية (أي استجابة بحالة غير 2xx) تُرجَع كنوع فرعي من `ApiError`، بحسب كود الخطأ الذي يرسله الخادم — مثلاً `QuotaExceededError` عند نفاد الحصة اليومية أو الشهرية. هذا يتيح لك التقاط حالة فشل محددة عبر `instanceof` دون مطابقة نص الرسالة:
+كل إخفاق يقع بعد إنشاء العميل يرث من `WhatsDevError` — أخطاء الواجهة البرمجية وأخطاء الاتصال وأخطاء التوقيع والترويسات، جميعها. أخطاء الواجهة البرمجية (أي استجابة بحالة غير 2xx) تُرجَع كنوع فرعي من `ApiError`، بحسب كود الخطأ الذي يرسله الخادم — مثلاً `QuotaExceededError` عند نفاد الحصة اليومية أو الشهرية. هذا يتيح لك التقاط حالة فشل محددة عبر `instanceof` دون مطابقة نص الرسالة:
 
 ```ts
 import { ApiError, QuotaExceededError } from '@whatsdev/sdk'
@@ -65,6 +65,8 @@ try {
 
 كود خطأ لا تعرفه نسخة الحزمة الحالية (لأن الخادم أضافه لاحقًا) لا يكسر شيئًا — يصلك كـ `ApiError` عادي بدل نوع فرعي مخصص، فيبقى كودك يعمل مع أي إصدار مستقبلي من الواجهة البرمجية.
 
+**حالة واحدة خارج هذا التسلسل عن قصد:** إنشاء عميل بلا `apiKey` يرمي `Error` عاديًا من JavaScript نفسها، لأنه خطأ في وسائط الاستدعاء لا شيء فعلته الواجهة البرمجية، ولأنه يقع قبل أن يوجد طلب أصلاً. أما مفاتيح خيارات `request()` فتتحقق منها TypeScript وقت البناء (compile time) لا وقت التشغيل، فالمفتاح المكتوب خطأً خطأُ ترجمة لا استثناء.
+
 ### الترقيم الصفحي (Pagination)
 
 كل دالة `list()` تُرجع كائن `Paginator` قابلاً للتكرار مباشرة بـ `for await...of` — يجلب الصفحة التالية تلقائيًا عند الحاجة دون أن تكتب منطق الترقيم بنفسك:
@@ -76,6 +78,21 @@ for await (const contact of client.contacts.list({ status: 'active' })) {
 ```
 
 لا تبدأ أي طلبات فعلية حتى تبدأ فعليًا بالتكرار (lazy)، وتتوقف الحلقة تلقائيًا عند آخر صفحة.
+
+### تنزيل الوسائط (Media)
+
+رسالة وسائط واردة يحتفظ الخادم بملفها. والدالة `media()` هي الوحيدة في الحزمة التي لا تُرجع JSON مفكوكًا؛ فهي تُسلّمك البايتات كما تدفّقت بالضبط، مع نوع المحتوى (content type) الذي سمّاه الخادم:
+
+```ts
+import { writeFile } from 'node:fs/promises'
+
+const file = await client.messages.media(messageId)
+
+await writeFile('/tmp/inbound-media', file.bytes)
+console.log(file.contentType) // مثلاً image/jpeg، أو null إذا لم يُرسل الخادم النوع
+```
+
+`file.bytes` من نوع `Uint8Array` يحمل البايتات الخام، و`file.contentType` هي قيمة ترويسة `Content-Type` أو `null`. فكّ ترميز صورة على أنها JSON كان سيُضيع الشيء الوحيد الذي طلبته، ولهذا اختصّت هذه الدالة وحدها بنوع إرجاع خاص بها.
 
 ### التحقق من الويب هوك (Webhook Verification)
 
@@ -106,7 +123,24 @@ async function handleWebhook(request: Request, webhookSecret: string) {
 const groups = await client.request('GET', 'v1/sessions/7/groups', { query: { limit: 10 } })
 ```
 
-يمر هذا الاستدعاء عبر نفس طبقة النقل (transport) — المصادقة وإعادة المحاولة (retry) ومعالجة الأخطاء — تمامًا مثل أي دالة أخرى في الحزمة، لذا لا يوجد شيء في الواجهة البرمجية غير قابل للوصول من خلال SDK. يمكنك أيضًا تمرير معامل نوع عام (generic) اختياري، مثل `request<{ data: unknown[] }>(...)`, للحصول على تلميحات أنواع أدق عند الحاجة.
+الوسيط الثالث كائن خيارات حقوله `query` و`body` و`headers` و`idempotencyKey`، وتتحقق TypeScript من أسمائها وقت البناء فلا يمر حقل مكتوب خطأً إلى وقت التشغيل. ومعظم ما يصل إليه هذا المخرج عمليات كتابة، وهي تحتاج جسمًا:
+
+```ts
+const group = await client.request('POST', 'v1/sessions/7/groups', {
+  body: { name: 'Ops team', participants: ['967700000000'] },
+})
+```
+
+**وإعادة المحاولة (retry) هنا تجري بنفس قاعدة بقية الحزمة، وهذه القاعدة ليست "دائمًا".** طلب `GET` تُعاد محاولته عند خطأ اتصال وعند الحالات 429 و502 و503 و504. أما عملية الكتابة — `POST` و`PUT` و`PATCH` و`DELETE` — فلا تُعاد محاولتها **إلا إذا حملت ترويسة `Idempotency-Key`**، لأن إعادة إرسال كتابة ربما قبلها الخادم فعلاً قد توصل رسالة حقيقية مرتين. الدوال المخصصة للإرسال تولّد هذا المفتاح نيابةً عنك، أما مخرج الطوارئ فلا يولّده — فمرّره بنفسك متى أردت أن تكون الكتابة قابلة لإعادة المحاولة:
+
+```ts
+const group = await client.request('POST', 'v1/sessions/7/groups', {
+  body: { name: 'Ops team', participants: ['967700000000'] },
+  idempotencyKey: 'ops-team-2026-08-14',
+})
+```
+
+وما عدا ذلك مشترك مع بقية الحزمة: المصادقة، والأخطاء النوعية المذكورة أعلاه، وغلاف `data` كما وصل. لذا لا يوجد شيء في الواجهة البرمجية غير قابل للوصول من خلال SDK. ويمكنك أيضًا تمرير معامل نوع عام (generic) اختياري، مثل `request<{ data: unknown[] }>(...)`، للحصول على تلميحات أنواع أدق عند الحاجة.
 
 ---
 
@@ -151,7 +185,7 @@ Get a test key from your account dashboard (API Keys → create a new key with t
 
 ### Error handling
 
-Every error the package throws extends `WhatsDevError`. API errors (any non-2xx response) come back as a subclass of `ApiError` matching the server's error code — for example `QuotaExceededError` when a daily or monthly send quota is exhausted. That lets you catch a specific failure with `instanceof` without string-matching a message:
+Every failure that happens once you have a client extends `WhatsDevError` — API errors, connection errors, and the webhook and header failures alike. API errors (any non-2xx response) come back as a subclass of `ApiError` matching the server's error code — for example `QuotaExceededError` when a daily or monthly send quota is exhausted. That lets you catch a specific failure with `instanceof` without string-matching a message:
 
 ```ts
 import { ApiError, QuotaExceededError } from '@whatsdev/sdk'
@@ -171,6 +205,8 @@ try {
 
 An error code this version of the package doesn't recognise (because the server added it later) never breaks anything — it arrives as a plain `ApiError` instead of a typed subclass, so your code keeps working against a newer API.
 
+**One failure sits outside that hierarchy on purpose:** constructing a client without an `apiKey` throws a plain JavaScript `Error`, because it is a wrong argument rather than anything the API did, and it happens before a request exists. `request()`'s option names are checked by TypeScript at compile time rather than at runtime, so a mistyped key is a build error, not an exception to catch.
+
 ### Pagination
 
 Every `list()` method returns a `Paginator` you can iterate directly with `for await...of` — it fetches the next page automatically, so you never write paging logic by hand:
@@ -182,6 +218,21 @@ for await (const contact of client.contacts.list({ status: 'active' })) {
 ```
 
 No request is issued until you actually start iterating (it's lazy), and the loop stops itself after the last page.
+
+### Downloading media
+
+An inbound media message has its file stored on the server. `media()` is the one method in the package that doesn't return decoded JSON — it hands back the bytes exactly as they were streamed, plus the content type the server named them:
+
+```ts
+import { writeFile } from 'node:fs/promises'
+
+const file = await client.messages.media(messageId)
+
+await writeFile('/tmp/inbound-media', file.bytes)
+console.log(file.contentType) // e.g. image/jpeg, or null if the server named none
+```
+
+`file.bytes` is a `Uint8Array` of the raw bytes and `file.contentType` is the `Content-Type` header or `null`. Decoding a picture as JSON would have discarded the only thing you asked for, which is why this one method has a return type of its own.
 
 ### Webhook verification
 
@@ -212,4 +263,21 @@ Any endpoint the package doesn't have a dedicated method for is still one call a
 const groups = await client.request('GET', 'v1/sessions/7/groups', { query: { limit: 10 } })
 ```
 
-It goes through the same transport as every other call — authentication, retries, typed errors — so nothing in the API is ever unreachable from the SDK. You can also pass an optional generic type parameter, like `request<{ data: unknown[] }>(...)`, for more precise type hints when you want them.
+The third argument is an options object with `query`, `body`, `headers` and `idempotencyKey`, whose names TypeScript checks at compile time so a mistyped one never reaches runtime. Most of what the escape hatch reaches are writes, and a write takes a body:
+
+```ts
+const group = await client.request('POST', 'v1/sessions/7/groups', {
+  body: { name: 'Ops team', participants: ['967700000000'] },
+})
+```
+
+**Retries follow the same rule here as everywhere else in the package, and that rule is not "always".** A `GET` is retried on a connection error and on 429, 502, 503 and 504. A write — `POST`, `PUT`, `PATCH`, `DELETE` — is retried **only when it carries an `Idempotency-Key`**, because replaying a write the server may already have accepted could deliver a real message twice. The dedicated send methods generate that key for you; the escape hatch does not, so pass one yourself whenever you want a write to be retryable:
+
+```ts
+const group = await client.request('POST', 'v1/sessions/7/groups', {
+  body: { name: 'Ops team', participants: ['967700000000'] },
+  idempotencyKey: 'ops-team-2026-08-14',
+})
+```
+
+Everything else is shared with the rest of the package: authentication, the typed errors above, and the response body exactly as it arrived, `data` wrapper included. So nothing in the API is ever unreachable from the SDK. You can also pass an optional generic type parameter, like `request<{ data: unknown[] }>(...)`, for more precise type hints when you want them.
