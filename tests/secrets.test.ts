@@ -30,3 +30,46 @@ describe('api key exposure', () => {
     expect(client.config.maxRetries).toBe(2)
   })
 })
+
+// The same "log the resolved config at boot" line runs in a PHP service and a Node one. PHP's
+// Config redacts under print_r and json_encode; these pin the sibling behaviour so the pair
+// cannot drift into one team's aggregator holding a live key and the other's holding ***redacted***.
+describe('the config object handed to the caller', () => {
+  it('redacts the key under JSON.stringify while keeping the rest', () => {
+    const config = new WhatsDevClient({ apiKey: KEY, baseUrl: 'https://example.test' }).config
+    const encoded = JSON.stringify(config)
+
+    expect(encoded).not.toContain(KEY)
+    expect(encoded).toContain('***redacted***')
+    expect(encoded).toContain('example.test')
+  })
+
+  it('redacts the key under util.inspect, which is what console.log prints', () => {
+    const config = new WhatsDevClient({ apiKey: KEY, baseUrl: 'https://example.test' }).config
+
+    expect(inspect(config)).not.toContain(KEY)
+    expect(inspect(config)).toContain('***redacted***')
+    expect(inspect({ config })).not.toContain(KEY)
+  })
+
+  // showHidden walks the prototype, so the config getter is resolved and printed in full.
+  it('redacts the key when inspect reaches it through the getter', () => {
+    const client = new WhatsDevClient(KEY)
+
+    expect(inspect(client, { getters: true, showHidden: true, depth: 2 })).not.toContain(KEY)
+  })
+
+  it('reads the real key back through the property, which is the documented access', () => {
+    const config = new WhatsDevClient(KEY).config
+
+    expect(config.apiKey).toBe(KEY)
+  })
+
+  // Redaction must not change the shape: an enumerable toJSON would appear in Object.keys and a spread.
+  it('leaves the enumerable shape untouched', () => {
+    const config = new WhatsDevClient(KEY).config
+
+    expect(Object.keys(config)).toEqual(['apiKey', 'baseUrl', 'timeout', 'maxRetries', 'headers'])
+    expect({ ...config }.apiKey).toBe(KEY)
+  })
+})
